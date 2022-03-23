@@ -1,0 +1,7 @@
+.env
+.env-docker
+.vscode
+exports
+venv
+.env-docker
+__pycache__
