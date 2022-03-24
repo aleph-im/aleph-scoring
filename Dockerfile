@@ -11,4 +11,4 @@ WORKDIR /home/docker-user
 
 COPY aleph_scoring/. aleph_scoring/.
 
-CMD [ "python", "-m", "aleph_scoring.main", "run-on-schedule"]
+CMD [ "python", "-m", "aleph_scoring", "run-on-schedule"]
