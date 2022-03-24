@@ -11,19 +11,9 @@ from urllib.request import urlopen
 import aiohttp
 import async_timeout
 import pandas as pd
-import sentry_sdk
 from pydantic import BaseModel
 
 from .config import settings
-
-sentry_sdk.init(
-    settings.SENTRY_DSN,
-    ignore_errors=[
-        aiohttp.ClientResponseError,
-        aiohttp.ClientConnectorError,
-        asyncio.TimeoutError,
-    ],
-)
 
 
 # Global variables
