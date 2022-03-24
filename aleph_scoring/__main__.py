@@ -9,15 +9,6 @@ import typer
 from .config import settings
 from .scoring import compute_node_scores, measure_node_performance
 
-sentry_sdk.init(
-    settings.SENTRY_DSN,
-    ignore_errors=[
-        aiohttp.ClientResponseError,
-        aiohttp.ClientConnectorError,
-        asyncio.TimeoutError,
-    ],
-)
-
 app = typer.Typer()
 
 
@@ -37,5 +28,17 @@ def run_on_schedule():
         time.sleep(1)
 
 
-if __name__ == "__main__":
+def main():
+    sentry_sdk.init(
+        settings.SENTRY_DSN,
+        ignore_errors=[
+            aiohttp.ClientResponseError,
+            aiohttp.ClientConnectorError,
+            asyncio.TimeoutError,
+        ],
+    )
     app()
+
+
+if __name__ == "__main__":
+    main()
