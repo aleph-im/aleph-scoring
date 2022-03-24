@@ -1,0 +1,10 @@
+.env
+.env-docker
+.vscode
+exports
+venv
+__pycache__
+<<<<<<< HEAD
+=======
+.env-docker
+>>>>>>> 7a08b6906d273eae12c95712e63f7fa862abb207

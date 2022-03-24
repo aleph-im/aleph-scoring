@@ -1,0 +1,7 @@
+version: '3'
+services: 
+    aleph-scoring:
+        build: .
+        image: aleph-scoring:latest
+        volumes:
+            - /home/arnaud/Documents/Repos/Okeso/aleph-scoring/exports:/home/docker-user/exports

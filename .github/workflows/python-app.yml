@@ -1,0 +1,25 @@
+name: Python application
+
+on:
+  push:
+    branches: '**'
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v2
+      with:
+        python-version: "3.8"
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install mypy==0.910 flake8==4.0.1
+    - name: Lint with flake8
+      run: |
+        mypy --ignore-missing-imports .
+        flake8 .
