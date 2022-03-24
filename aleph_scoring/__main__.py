@@ -1,7 +1,5 @@
-import asyncio
 import time
 
-import aiohttp
 import schedule
 import sentry_sdk
 import typer
@@ -31,11 +29,6 @@ def run_on_schedule():
 def main():
     sentry_sdk.init(
         settings.SENTRY_DSN,
-        ignore_errors=[
-            aiohttp.ClientResponseError,
-            aiohttp.ClientConnectorError,
-            asyncio.TimeoutError,
-        ],
     )
     app()
 
