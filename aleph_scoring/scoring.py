@@ -84,13 +84,14 @@ async def execute_request(
                     end = time.time()
                     return end - start, None
     except aiohttp.ClientResponseError:
-        pass
+        logger.warning(f"Error when fetching {url}")
+        return None, None
     except aiohttp.ClientConnectorError:
-        pass
+        logger.warning(f"Error when fetching {url}")
+        return None, None
     except asyncio.TimeoutError:
-        pass
-
-    return None, None
+        logger.warning(f"Timeout error when fetching {url}")
+        return None, None
 
 
 # Pydantic classe to parse json to object
