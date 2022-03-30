@@ -1,7 +1,10 @@
 version: '3'
-services: 
-    aleph-scoring:
-        build: .
-        image: aleph-scoring:latest
-        volumes:
-            - /home/arnaud/Documents/Repos/Okeso/aleph-scoring/exports:/home/docker-user/exports
+services:
+  aleph-scoring:
+    build: .
+    image: aleph-scoring:latest
+    command: "run-on-schedule --save-to-file=/exports/metrics.hdf5"
+    environment:
+      SENTRY_DSN: ""
+    volumes:
+      - ./exports:/exports
