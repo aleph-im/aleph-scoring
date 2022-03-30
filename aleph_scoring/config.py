@@ -5,7 +5,7 @@ from pydantic import BaseSettings
 
 
 class Settings(BaseSettings):
-    NODE_DATA_HOST = "https://api2.aleph.im"
+    NODE_DATA_HOST = "https://official.aleph.cloud"
     NODE_DATA_ADDR = "0xa1B3bb7d2332383D96b7796B908fB7f7F3c2Be10"
     NODE_DATA_TEMPLATE = "{}/api/v0/aggregates/{}.json?keys=corechannel&limit=50"
 
