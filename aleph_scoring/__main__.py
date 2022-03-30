@@ -1,3 +1,4 @@
+import asyncio.exceptions
 import logging
 import time
 from pathlib import Path
@@ -27,11 +28,21 @@ def run_n_times(n: int = 2, save_to_file: Optional[Path] = None):
     for i in range(n):
         t0 = time.time()
 
-        measure_node_performance_sync(save_to_file=save_to_file)
+        try:
+            measure_node_performance_sync(save_to_file=save_to_file)
 
-        duration = time.time() - t0
-        delay = max(60 - duration, 0)
-        time.sleep(delay)
+            duration = time.time() - t0
+            delay = max(60 - duration, 0)
+            logger.debug(
+                f"Waiting for {delay:.2f} seconds before measurement {i + 1}/{n}..."
+            )
+            time.sleep(delay)
+        except asyncio.exceptions.TimeoutError:
+            logger.warning(
+                "Node info could not be fetched. Retrying in 5 seconds...",
+                exc_info=True,
+            )
+            time.sleep(5)
 
 
 @app.command()
