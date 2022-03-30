@@ -47,6 +47,7 @@ def run_n_times(n: int = 2, save_to_file: Optional[Path] = None):
 
 @app.command()
 def run_on_schedule(save_to_file: Optional[Path] = None):
+    measure_node_performance_sync(save_to_file=save_to_file)
     schedule.every(1).minutes.at(":00").do(
         measure_node_performance_sync, save_to_file=save_to_file
     )
