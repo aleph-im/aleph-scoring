@@ -12,7 +12,8 @@ import async_timeout
 import numpy
 import pandas as pd
 from pandas import DataFrame
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
+from urllib3.util import Url, parse_url
 
 from .config import settings
 
@@ -37,28 +38,50 @@ CRN_DIAGNOSTIC_VM_PATH = (
 )
 
 
+class NodeInfo(BaseModel):
+    url: Url
+    hash: str
+
+    @validator('hash')
+    def hash_format(cls, v) -> str:
+        if len(v) != 64:
+            raise ValueError("must have a length of 64")
+        try:
+            # Parse as hexadecimal using int()
+            int(v, 16)
+        except ValueError:
+            raise ValueError("must be hexadecimal")
+        return v
+
+
 def get_api_node_urls(
     raw_data: Dict[str, Any]
-) -> Generator[Dict[str, str], None, None]:
+) -> Generator[NodeInfo, None, None]:
     """Extract CCN urls from node data."""
     for node in raw_data["data"]["corechannel"]["nodes"]:
         multiaddress = node["multiaddress"]
         match = re.findall(r"/ip4/([\d\\.]+)/.*", multiaddress)
         if match:
             ip = match[0]
-            yield {"url": f"http://{ip}:4024/"}
+            yield NodeInfo(
+                url=parse_url(f"http://{ip}:4024/"),
+                hash=node["hash"],
+            )
 
 
 def get_compute_resource_node_urls(
     raw_data: Dict[str, Any]
-) -> Generator[Dict[str, str], None, None]:
+) -> Generator[NodeInfo, None, None]:
     """Extract CRN node urls the node data."""
     for node in raw_data["data"]["corechannel"]["resource_nodes"]:
         addr = node["address"].strip("/")
         if addr:
             if not addr.startswith("https://"):
                 addr = "https://" + addr
-            yield {"url": addr + "/"}
+            yield NodeInfo(
+                url=parse_url(addr + "/"),
+                hash=node["hash"],
+            )
 
 
 async def measure_http_latency(
@@ -110,7 +133,9 @@ class CCNMetrics(BaseModel):
         allow_population_by_field_name = True
 
 
-async def get_ccn_metrics(session: aiohttp.ClientSession, url: str) -> dict:
+async def get_ccn_metrics(session: aiohttp.ClientSession, node_info: NodeInfo) -> dict:
+    url = node_info.url.url
+    measured_at = datetime.utcnow()
     base_latency = (
         await measure_http_latency(session, f"{url}api/v0/info/public.json")
     )[0]
@@ -141,6 +166,8 @@ async def get_ccn_metrics(session: aiohttp.ClientSession, url: str) -> dict:
         json_object = CCNMetrics()
 
     metrics = {
+        "measured_at": measured_at,
+        "node_id": node_info.hash,
         "url": url,
         "base_latency": base_latency,
         "metrics_latency": metrics_latency,
@@ -154,7 +181,9 @@ async def get_ccn_metrics(session: aiohttp.ClientSession, url: str) -> dict:
     return metrics
 
 
-async def get_crn_metrics(session: aiohttp.ClientSession, url: str) -> dict:
+async def get_crn_metrics(session: aiohttp.ClientSession, node_info: NodeInfo) -> dict:
+    url = node_info.url.url
+    measured_at = datetime.utcnow()
     base_latency = (
         await measure_http_latency(
             session,
@@ -179,6 +208,8 @@ async def get_crn_metrics(session: aiohttp.ClientSession, url: str) -> dict:
     )[0]
 
     metrics = {
+        "measured_at": measured_at,
+        "node_id": node_info.hash,
         "url": url,
         "base_latency": base_latency,
         "diagnostic_VM_latency": diagnostic_VM_latency,
@@ -189,14 +220,14 @@ async def get_crn_metrics(session: aiohttp.ClientSession, url: str) -> dict:
 
 
 async def collect_node_metrics(
-    node_infos: Iterable[Dict[str, str]], metrics_function: Callable
+    node_infos: Iterable[NodeInfo], metrics_function: Callable
 ):
     timeout = aiohttp.ClientTimeout(
         total=60.0, connect=2.0, sock_connect=2.0, sock_read=60.0
     )
     async with aiohttp.ClientSession(timeout=timeout) as session:
         return await asyncio.gather(
-            *[metrics_function(session, node_info["url"]) for node_info in node_infos]
+            *[metrics_function(session, node_info) for node_info in node_infos]
         )
 
 
