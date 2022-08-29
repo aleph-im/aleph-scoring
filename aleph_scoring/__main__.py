@@ -1,5 +1,6 @@
 import asyncio.exceptions
 import logging
+import os
 import time
 from pathlib import Path
 from typing import Optional
@@ -57,6 +58,11 @@ def run_on_schedule(save_to_file: Optional[Path] = None):
     while True:
         schedule.run_pending()
         time.sleep(1)
+
+
+@app.command()
+def export_as_html(input_file: Optional[Path]):
+    os.system("jupyter nbconvert --execute Node\\ Score\\ Analysis.ipynb --to html")
 
 
 def main():

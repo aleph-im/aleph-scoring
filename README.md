@@ -20,3 +20,9 @@ run the docker-compose and the application will start automatically
 ```sh
 docker-compose up
 ```
+
+## Update the report
+
+```shell
+jupyter nbconvert --execute Node\ Score\ Analysis.ipynb --to html
+```
