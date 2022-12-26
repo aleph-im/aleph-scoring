@@ -4,3 +4,11 @@
 exports
 venv
 __pycache__
+
+# PyCharm files
+.idea/
+
+# ASN DB files
+asn_db
+asn_db.bz2
+asnames.json

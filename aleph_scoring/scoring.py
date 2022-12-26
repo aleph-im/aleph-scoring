@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import re
+import socket
 import time
 from datetime import datetime
 from pathlib import Path
@@ -14,7 +15,10 @@ import pandas as pd
 from pandas import DataFrame
 from pydantic import BaseModel, validator
 from urllib3.util import Url, parse_url
+import pyasn
+from urllib.parse import urlparse
 
+from .asn import get_asn_database
 from .config import settings
 
 logger = logging.getLogger(__name__)
@@ -123,6 +127,27 @@ async def measure_http_latency(
         return None, None
 
 
+def get_ipv4(url: str) -> Optional[str]:
+    domain = urlparse(url).netloc
+    try:
+        return socket.gethostbyname(domain)
+    except socket.gaierror:
+        return None
+
+
+def lookup_asn(asn_db: pyasn.pyasn, url: str) -> Union[Tuple[str, str], Tuple[None, None]]:
+    ip_addr = get_ipv4(url)
+    if ip_addr is None:
+        logger.debug("Could not determine IP address for %s", url)
+        return None, None
+    asn = asn_db.lookup(ip_addr)[0]
+    if asn is None:
+        logger.debug("ASN lookup for (%s) %s did not return a result", ip_addr, url)
+        return None, None
+
+    return asn, asn_db.get_as_name(asn)
+
+
 # Pydantic class to parse json to object
 class CCNMetrics(BaseModel):
     pyaleph_status_sync_pending_txs_total: Union[int, float] = numpy.NaN
@@ -133,9 +158,12 @@ class CCNMetrics(BaseModel):
         allow_population_by_field_name = True
 
 
-async def get_ccn_metrics(session: aiohttp.ClientSession, node_info: NodeInfo) -> dict:
+async def get_ccn_metrics(session: aiohttp.ClientSession, asn_db: pyasn.pyasn, node_info: NodeInfo) -> dict:
     url = node_info.url.url
     measured_at = datetime.utcnow()
+
+    asn = lookup_asn(asn_db, url)
+
     base_latency = (
         await measure_http_latency(session, f"{url}api/v0/info/public.json")
     )[0]
@@ -169,6 +197,7 @@ async def get_ccn_metrics(session: aiohttp.ClientSession, node_info: NodeInfo) -
         "measured_at": measured_at,
         "node_id": node_info.hash,
         "url": url,
+        "asn": asn,
         "base_latency": base_latency,
         "metrics_latency": metrics_latency,
         "aggregate_latency": aggregate_latency,
@@ -181,9 +210,12 @@ async def get_ccn_metrics(session: aiohttp.ClientSession, node_info: NodeInfo) -
     return metrics
 
 
-async def get_crn_metrics(session: aiohttp.ClientSession, node_info: NodeInfo) -> dict:
+async def get_crn_metrics(session: aiohttp.ClientSession, asn_db: pyasn.pyasn, node_info: NodeInfo) -> dict:
     url = node_info.url.url
     measured_at = datetime.utcnow()
+
+    asn = lookup_asn(asn_db, url)
+
     base_latency = (
         await measure_http_latency(
             session,
@@ -211,6 +243,7 @@ async def get_crn_metrics(session: aiohttp.ClientSession, node_info: NodeInfo) -
         "measured_at": measured_at,
         "node_id": node_info.hash,
         "url": url,
+        "asn": asn,
         "base_latency": base_latency,
         "diagnostic_VM_latency": diagnostic_VM_latency,
         "full_check_latency": full_check_latency,
@@ -222,12 +255,13 @@ async def get_crn_metrics(session: aiohttp.ClientSession, node_info: NodeInfo) -
 async def collect_node_metrics(
     node_infos: Iterable[NodeInfo], metrics_function: Callable
 ):
+    asn_db = get_asn_database()
     timeout = aiohttp.ClientTimeout(
         total=60.0, connect=2.0, sock_connect=2.0, sock_read=60.0
     )
     async with aiohttp.ClientSession(timeout=timeout) as session:
         return await asyncio.gather(
-            *[metrics_function(session, node_info) for node_info in node_infos]
+            *[metrics_function(session, asn_db, node_info) for node_info in node_infos]
         )
 
 
