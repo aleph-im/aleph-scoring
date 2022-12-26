@@ -1,372 +1,46 @@
-import asyncio
+import itertools
 import logging
-import re
-import socket
-import time
+import math
+from collections import defaultdict
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, Generator, Optional, Tuple, Callable, Iterable, Union
-from typing import Literal
+from typing import Sequence, List, Dict, Optional, Iterable, Collection
 
-import aiohttp
-import async_timeout
-import numpy
 import pandas as pd
-from pandas import DataFrame
-from pydantic import BaseModel, validator
-from urllib3.util import Url, parse_url
-import pyasn
-from urllib.parse import urlparse
 
-from .asn import get_asn_database
 from .config import settings
+from .schemas.metrics import NodeMetrics, CcnMetrics, CrnMetrics, AlephNodeMetrics
+from .schemas.scoring import NodeScores, CcnScore, CrnScore
 
-logger = logging.getLogger(__name__)
-
-# Global variable used to aggregate the metrics over time
-metrics_log = {"core_channel_nodes": None, "compute_resource_nodes": None}
-MetricsLogKey = Literal["core_channel_nodes", "compute_resource_nodes"]
-
-CCN_AGGREGATE_PATH = (
-    "{url}api/v0/aggregates/0xa1B3bb7d2332383D96b7796B908fB7f7F3c2Be10.json"
-    "?keys=corechannel&limit=50"
-)
-
-CCN_FILE_DOWNLOAD_PATH = (
-    "{url}api/v0/storage/raw/"
-    "50645d4ccfddb7540e7bb17ffa5609ec8a980e588e233f0e2c4451f6f9da6ebd"
-)
-
-CRN_DIAGNOSTIC_VM_PATH = (
-    "{url}vm/67705389842a0a1b95eaa408b009741027964edc805997475e95c505d642edd8",
-)
+LOGGER = logging.getLogger(__name__)
 
 
-class NodeInfo(BaseModel):
-    url: Url
-    hash: str
-
-    @validator('hash')
-    def hash_format(cls, v) -> str:
-        if len(v) != 64:
-            raise ValueError("must have a length of 64")
-        try:
-            # Parse as hexadecimal using int()
-            int(v, 16)
-        except ValueError:
-            raise ValueError("must be hexadecimal")
-        return v
+def score_latency(value: Optional[float]) -> float:
+    if value is None:
+        return 0.0
+    value = max(min(value, value - 0.10), 0)  # Tolerance
+    score = max(1 - value, 0)
+    assert 0 <= score <= 1, f"Out of range {score} from {value}"
+    return score
 
 
-def get_api_node_urls(
-    raw_data: Dict[str, Any]
-) -> Generator[NodeInfo, None, None]:
-    """Extract CCN urls from node data."""
-    for node in raw_data["data"]["corechannel"]["nodes"]:
-        multiaddress = node["multiaddress"]
-        match = re.findall(r"/ip4/([\d\\.]+)/.*", multiaddress)
-        if match:
-            ip = match[0]
-            yield NodeInfo(
-                url=parse_url(f"http://{ip}:4024/"),
-                hash=node["hash"],
-            )
+def score_pending_messages(value: Optional[float]):
+    if value is None or math.isnan(value):
+        value = 1_000_000
+    value = min(int(value), 1_000_000)
+    return 1 - (value / 1_000_000)
 
 
-def get_compute_resource_node_urls(
-    raw_data: Dict[str, Any]
-) -> Generator[NodeInfo, None, None]:
-    """Extract CRN node urls the node data."""
-    for node in raw_data["data"]["corechannel"]["resource_nodes"]:
-        addr = node["address"].strip("/")
-        if addr:
-            if not addr.startswith("https://"):
-                addr = "https://" + addr
-            yield NodeInfo(
-                url=parse_url(addr + "/"),
-                hash=node["hash"],
-            )
+def score_eth_height_remaining(value: Optional[float]):
+    if value is None or math.isnan(value):
+        value = 100_000
+    value = max(int(value), 0)
+    return 1 - (value / 100_000)
 
 
-async def measure_http_latency(
-    session: aiohttp.ClientSession,
-    url: str,
-    timeout_seconds=settings.HTTP_REQUEST_TIMEOUT,
-    return_json: bool = False,
-    expected_status: int = 200,
-) -> Tuple[Optional[float], Optional[Any]]:
-    try:
-        async with async_timeout.timeout(timeout_seconds):
-            start = time.time()
-            async with session.get(url) as resp:
-                if resp.status != expected_status:
-                    raise aiohttp.ClientResponseError(
-                        resp.request_info,
-                        resp.history,
-                        status=resp.status,
-                        message="Wrong status code",
-                    )
-                if return_json:
-                    json_text = await resp.json()
-                    end = time.time()
-                    logger.debug(f"Success when fetching {url}")
-                    return end - start, json_text
-                else:
-                    await resp.release()
-                    end = time.time()
-                    logger.debug(f"Success when fetching {url}")
-                    return end - start, None
-    except aiohttp.ClientResponseError:
-        logger.debug(f"Error when fetching {url}")
-        return None, None
-    except aiohttp.ClientConnectorError:
-        logger.debug(f"Error when fetching {url}")
-        return None, None
-    except asyncio.TimeoutError:
-        logger.debug(f"Timeout error when fetching {url}")
-        return None, None
-
-
-def get_ipv4(url: str) -> Optional[str]:
-    domain = urlparse(url).netloc
-    try:
-        return socket.gethostbyname(domain)
-    except socket.gaierror:
-        return None
-
-
-def lookup_asn(asn_db: pyasn.pyasn, url: str) -> Union[Tuple[str, str], Tuple[None, None]]:
-    ip_addr = get_ipv4(url)
-    if ip_addr is None:
-        logger.debug("Could not determine IP address for %s", url)
-        return None, None
-    asn = asn_db.lookup(ip_addr)[0]
-    if asn is None:
-        logger.debug("ASN lookup for (%s) %s did not return a result", ip_addr, url)
-        return None, None
-
-    return asn, asn_db.get_as_name(asn)
-
-
-# Pydantic class to parse json to object
-class CCNMetrics(BaseModel):
-    pyaleph_status_sync_pending_txs_total: Union[int, float] = numpy.NaN
-    pyaleph_status_sync_pending_messages_total: Union[int, float] = numpy.NaN
-    pyaleph_status_chain_eth_height_remaining_total: Union[int, float] = numpy.NaN
-
-    class Config:
-        allow_population_by_field_name = True
-
-
-async def get_ccn_metrics(session: aiohttp.ClientSession, asn_db: pyasn.pyasn, node_info: NodeInfo) -> dict:
-    url = node_info.url.url
-    measured_at = datetime.utcnow()
-
-    asn = lookup_asn(asn_db, url)
-
-    base_latency = (
-        await measure_http_latency(session, f"{url}api/v0/info/public.json")
-    )[0]
-    metrics_latency = (
-        await measure_http_latency(
-            session, f"{url}metrics.json", settings.HTTP_REQUEST_TIMEOUT
-        )
-    )[0]
-    aggregate_latency = (
-        await measure_http_latency(
-            session,
-            "".join(CCN_AGGREGATE_PATH).format(url=url),
-        )
-    )[0]
-    file_download_latency = (
-        await measure_http_latency(
-            session,
-            "".join(CCN_FILE_DOWNLOAD_PATH).format(url=url),
-        )
-    )[0]
-    time, json_text = await measure_http_latency(
-        session, f"{url}metrics.json", settings.HTTP_REQUEST_TIMEOUT, True
-    )
-
-    if json_text is not None:
-        json_object = CCNMetrics(**json_text)
-    else:
-        json_object = CCNMetrics()
-
-    metrics = {
-        "measured_at": measured_at,
-        "node_id": node_info.hash,
-        "url": url,
-        "asn": asn,
-        "base_latency": base_latency,
-        "metrics_latency": metrics_latency,
-        "aggregate_latency": aggregate_latency,
-        "file_download_latency": file_download_latency,
-        "txs_total": json_object.pyaleph_status_sync_pending_txs_total,
-        "pending_messages": json_object.pyaleph_status_sync_pending_messages_total,  # noqa:E501
-        "eth_height_remaining": json_object.pyaleph_status_chain_eth_height_remaining_total,  # noqa:E501
-    }
-
-    return metrics
-
-
-async def get_crn_metrics(session: aiohttp.ClientSession, asn_db: pyasn.pyasn, node_info: NodeInfo) -> dict:
-    url = node_info.url.url
-    measured_at = datetime.utcnow()
-
-    asn = lookup_asn(asn_db, url)
-
-    base_latency = (
-        await measure_http_latency(
-            session,
-            f"{url}about/login",
-            expected_status=401,
-        )
-    )[0]
-
-    diagnostic_VM_latency = (
-        await measure_http_latency(
-            session,
-            "".join(CRN_DIAGNOSTIC_VM_PATH).format(url=url),
-            timeout_seconds=10,
-        )
-    )[0]
-    full_check_latency = (
-        await measure_http_latency(
-            session,
-            f"{url}status/check/fastapi",
-            timeout_seconds=20,
-        )
-    )[0]
-
-    metrics = {
-        "measured_at": measured_at,
-        "node_id": node_info.hash,
-        "url": url,
-        "asn": asn,
-        "base_latency": base_latency,
-        "diagnostic_VM_latency": diagnostic_VM_latency,
-        "full_check_latency": full_check_latency,
-    }
-
-    return metrics
-
-
-async def collect_node_metrics(
-    node_infos: Iterable[NodeInfo], metrics_function: Callable
-):
-    asn_db = get_asn_database()
-    timeout = aiohttp.ClientTimeout(
-        total=60.0, connect=2.0, sock_connect=2.0, sock_read=60.0
-    )
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        return await asyncio.gather(
-            *[metrics_function(session, asn_db, node_info) for node_info in node_infos]
-        )
-
-
-async def collect_all_ccn_metrics(node_data: Dict[str, Any]):
-    node_infos = get_api_node_urls(node_data)
-    return await collect_node_metrics(
-        node_infos=node_infos, metrics_function=get_ccn_metrics
-    )
-
-
-async def collect_all_crn_metrics(node_data: Dict[str, Any]):
-    node_infos = get_compute_resource_node_urls(node_data)
-    return await collect_node_metrics(
-        node_infos=node_infos, metrics_function=get_crn_metrics
-    )
-
-
-async def get_aleph_nodes() -> Dict:
-    url = settings.node_data_url
-    timeout = aiohttp.ClientTimeout(total=10.0)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        resp = await session.get(url)
-        resp.raise_for_status()
-        return await resp.json()
-
-
-async def collect_all_node_metrics():
-    aleph_nodes = await get_aleph_nodes()
-    logger.debug("Fetched node data")
-    ccn_metrics = await collect_all_ccn_metrics(aleph_nodes)
-    logger.debug("Fetched CCN metrics")
-    crn_metrics = await collect_all_crn_metrics(aleph_nodes)
-    logger.debug("Fetched CRN metrics")
-    return ccn_metrics, crn_metrics
-
-
-def update_metrics_log(metrics_log, key: MetricsLogKey, new_metrics: DataFrame):
-    previous_metrics = metrics_log[key]
-    if previous_metrics is None:
-        metrics_log[key] = new_metrics
-    else:
-        metrics_log[key] = pd.concat((previous_metrics, new_metrics), ignore_index=True)
-
-
-def save_metrics_log(metrics_log):
-    store = pd.HDFStore("/tmp/store.h5")
-    try:
-        for key, value in metrics_log.items():
-            store[key] = value
-    finally:
-        store.close()
-
-
-def append_metrics_to_file(filepath: Path, new_metrics: Dict[MetricsLogKey, DataFrame]):
-    store = pd.HDFStore(filepath.as_posix(), mode="a")
-    try:
-        for key, value in new_metrics.items():
-            store.put(key, value, format="table", append=True, track_times=False)
-        logger.debug(f"Metrics stored in file '{filepath}'")
-    finally:
-        store.close()
-
-
-async def measure_node_performance(save_to_file: Optional[Union[Path, str]] = None):
-    logger.debug("Measuring node performance")
-
-    if isinstance(save_to_file, str):
-        save_to_file = Path(save_to_file)
-
-    ccn_metrics, crn_metrics = await collect_all_node_metrics()
-
-    new_metrics: Dict[MetricsLogKey, DataFrame] = {
-        "core_channel_nodes": DataFrame(ccn_metrics),
-        "compute_resource_nodes": DataFrame(crn_metrics),
-    }
-    if save_to_file:
-        append_metrics_to_file(filepath=save_to_file, new_metrics=new_metrics)
-
-
-def measure_node_performance_sync(save_to_file: Optional[Path] = None):
-    return asyncio.run(measure_node_performance(save_to_file=save_to_file))
-
-
-def compute_ccn_score(df: DataFrame):
-    "Compute the global score of a Core Channel Node (CCN)"
+def compute_ccn_score(df: pd.DataFrame):
+    """Compute the global score of a Core Channel Node (CCN)"""
 
     scores = df.copy()
-
-    def score_latency(value):
-        value = max(min(value, value - 0.10), 0)  # Tolerance
-        score = max(1 - value, 0)
-        assert 0 <= score <= 1, f"Out of range {score} from {value}"
-        return score
-
-    def score_pending_messages(value):
-        if value == "NaN":
-            value = 1_000_000
-        value = int(value)
-        return 1 - (value / 1_000_000)
-
-    def score_eth_height_remaining(value):
-        if value == "NaN":
-            value = 100_000
-        value = max(int(value), 0)
-        return 1 - (value / 100_000)
 
     scores["score_base_latency"] = df["base_latency"].fillna(10).apply(score_latency)
     scores["score_metrics_latency"] = (
@@ -396,22 +70,22 @@ def compute_ccn_score(df: DataFrame):
     return scores
 
 
-def compute_crn_score(df: DataFrame):
-    "Compute the global score of a Core Channel Node (CCN)"
+def compute_crn_score(df: pd.DataFrame):
+    """Compute the global score of a Core Channel Node (CCN)"""
 
     print(df)
 
     df = df.groupby("url").agg(
         {
             "base_latency": "mean",
-            "diagnostic_VM_latency": "mean",
+            "diagnostic_vm_latency": "mean",
             "full_check_latency": "mean",
         }
     )
 
     df["score"] = (
         df["base_latency"]
-        * df["diagnostic_VM_latency"]
+        * df["diagnostic_vm_latency"]
         * df["full_check_latency"]
         / 1000
     )
@@ -419,4 +93,109 @@ def compute_crn_score(df: DataFrame):
     if settings.EXPORT_DATAFRAME:
         df.to_csv(f"exports/crn_score-{datetime.now()}")
 
-    logger.info("Finished processing crn score ")
+    LOGGER.info("Finished processing crn score ")
+    return df
+
+
+def compute_asn_score(asn: Optional[int], nb_nodes: int, total_nb_nodes: int):
+    if asn is None:
+        return 0
+
+    return 1 - nb_nodes / total_nb_nodes
+
+
+def compute_decentralization_scores(
+    metrics: Collection[AlephNodeMetrics],
+) -> Dict[Optional[int], float]:
+    asn_count_dict = defaultdict(int)
+    for m in metrics:
+        asn_count_dict[m.asn] += 1
+
+    asn_scores = {
+        asn: compute_asn_score(asn, n, len(metrics))
+        for asn, n in asn_count_dict.items()
+    }
+    return asn_scores
+
+
+def compute_ccn_score_no_pandas(
+    ccn_metrics: CcnMetrics,
+    decentralization_scores: Dict[Optional[int], float],
+) -> CcnScore:
+    score_base_latency = score_latency(ccn_metrics.base_latency)
+    score_aggregate_latency = score_latency(ccn_metrics.aggregate_latency)
+    score_file_download_latency = score_latency(ccn_metrics.file_download_latency)
+    score_metrics_latency = score_latency(ccn_metrics.metrics_latency)
+    score_eth_height = score_eth_height_remaining(ccn_metrics.eth_height_remaining)
+    score_pending = score_pending_messages(ccn_metrics.pending_messages)
+
+    total_score = (
+        score_base_latency
+        * score_aggregate_latency
+        * score_file_download_latency
+        * score_metrics_latency
+        * score_eth_height
+        * score_pending
+    ) ** (1 / 6)
+
+    return CcnScore(
+        node_id=ccn_metrics.node_id,
+        total_score=total_score,
+        base_latency=score_base_latency,
+        decentralization=decentralization_scores[ccn_metrics.asn],
+        aggregate_latency=score_aggregate_latency,
+        file_download_latency=score_file_download_latency,
+        metrics_endpoint_latency=score_metrics_latency,
+        eth_height_remaining=score_eth_height,
+        pending_messages=score_pending,
+    )
+
+
+def compute_crn_score_no_pandas(
+    crn_metrics: CrnMetrics,
+    decentralization_scores: Dict[Optional[int], float],
+) -> CrnScore:
+    score_base_latency = score_latency(crn_metrics.base_latency)
+    score_diagnostic_vm_latency = score_latency(crn_metrics.diagnostic_vm_latency)
+    score_full_check_latency = score_latency(crn_metrics.full_check_latency)
+
+    total_score = (
+        score_base_latency * score_diagnostic_vm_latency * score_full_check_latency
+    ) ** (1 / 3)
+
+    return CrnScore(
+        node_id=crn_metrics.node_id,
+        total_score=total_score,
+        base_latency=score_base_latency,
+        decentralization=decentralization_scores[crn_metrics.asn],
+        diagnostic_vm_latency=score_diagnostic_vm_latency,
+        full_check_latency=score_full_check_latency,
+    )
+
+
+def compute_ccn_scores(ccn_metrics: Collection[CcnMetrics]) -> List[CcnScore]:
+    decentralization_scores = compute_decentralization_scores(ccn_metrics)
+    ccn_scores = [
+        compute_ccn_score_no_pandas(metrics, decentralization_scores)
+        for metrics in ccn_metrics
+    ]
+    return ccn_scores
+
+
+def compute_crn_scores(crn_metrics: Collection[CrnMetrics]) -> List[CrnScore]:
+    decentralization_scores = compute_decentralization_scores(crn_metrics)
+    crn_scores = [
+        compute_crn_score_no_pandas(metrics, decentralization_scores)
+        for metrics in crn_metrics
+    ]
+    return crn_scores
+
+
+def compute_scores(node_metrics: NodeMetrics) -> NodeScores:
+    ccn_scores = compute_ccn_scores(node_metrics.ccn)
+    crn_scores = compute_crn_scores(node_metrics.crn)
+
+    return NodeScores(
+        ccn=ccn_scores,
+        crn=crn_scores,
+    )

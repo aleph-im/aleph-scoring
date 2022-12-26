@@ -5,7 +5,7 @@ import logging
 from ftplib import FTP
 from pathlib import Path
 from time import time
-from typing import Literal, NewType, Tuple, Dict, Final
+from typing import Literal, NewType, Tuple, Dict, Final, Optional
 
 import pyasn
 import requests
@@ -20,7 +20,7 @@ Server = NewType("Server", str)
 
 LOGGER = logging.getLogger(__name__)
 EXTRACT_ASNAME_C: Final = re.compile(r"<a .+>AS(?P<code>.+?)\s*</a>\s*(?P<name>.*)", re.U)
-_asn_db = None
+_asn_db: Optional[pyasn.pyasn] = None
 _last_refresh = dt.datetime.min
 
 
@@ -128,7 +128,7 @@ def download_asnames() -> str:
     return response.text
 
 
-def _parse_asname_line(line):
+def _parse_asname_line(line: str) -> Tuple[str, str]:
     match = EXTRACT_ASNAME_C.match(line)
     return match.groups()
 
@@ -161,9 +161,9 @@ def get_asn_database() -> pyasn.pyasn:
         asn_db_file = Path.cwd() / "asn_db"
         as_names_files = Path.cwd() / "asnames.json"
 
-        update_asn_database(asn_archive_file)
-        convert_asn_database(asn_archive_file, asn_db_file)
-        update_names_file(as_names_files)
+        # update_asn_database(asn_archive_file)
+        # convert_asn_database(asn_archive_file, asn_db_file)
+        # update_names_file(as_names_files)
 
         _asn_db = pyasn.pyasn(asn_db_file.name, as_names_file=str(as_names_files))
         _last_refresh = dt.datetime.utcnow()
