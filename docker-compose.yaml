@@ -3,7 +3,7 @@ services:
   aleph-scoring:
     build: .
     image: aleph-scoring:latest
-    command: "run-on-schedule --save-to-file=/exports/metrics.hdf5"
+    command: "run-on-schedule --format json"
     environment:
       SENTRY_DSN: ""
     volumes:

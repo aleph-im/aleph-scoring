@@ -1,5 +1,8 @@
 FROM python:3.9-slim-bullseye
 
+# GCC is required to compile pyasn, git to install aleph-client with a git tag
+RUN apt-get update && apt-get install -y gcc git
+
 COPY requirements.txt requirements.txt
 RUN pip install -r requirements.txt
 
