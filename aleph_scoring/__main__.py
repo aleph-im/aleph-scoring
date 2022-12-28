@@ -184,7 +184,7 @@ def run_on_schedule(
 ):
 
     run_scoring(format=format, output_file=output_file, post_on_aleph=post_on_aleph)
-    schedule.every(1).minutes.at(":00").do(
+    schedule.every(settings.DAEMON_MODE_PERIOD_HOURS).hours.at(":00").do(
         run_scoring,
         format=format,
         output_file=output_file,
