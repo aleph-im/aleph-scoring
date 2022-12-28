@@ -5,6 +5,7 @@ import socket
 import time
 from datetime import datetime
 from pathlib import Path
+from bs4 import BeautifulSoup
 from typing import (
     Any,
     Dict,
@@ -101,7 +102,8 @@ async def measure_http_latency(
     session: aiohttp.ClientSession,
     url: str,
     timeout_seconds=settings.HTTP_REQUEST_TIMEOUT,
-    return_json: bool = False,
+    return_output: bool = False,
+    return_json: bool = True,
     expected_status: int = 200,
 ) -> Tuple[Optional[float], Optional[Any]]:
     try:
@@ -115,11 +117,14 @@ async def measure_http_latency(
                         status=resp.status,
                         message="Wrong status code",
                     )
-                if return_json:
-                    json_text = await resp.json()
+                if return_output:
+                    if return_json:
+                        output = await resp.json()
+                    else:
+                        output = await resp.text()
                     end = time.time()
                     LOGGER.debug(f"Success when fetching {url}")
-                    return end - start, json_text
+                    return end - start, output
                 else:
                     await resp.release()
                     end = time.time()
@@ -134,6 +139,25 @@ async def measure_http_latency(
     except asyncio.TimeoutError:
         LOGGER.debug(f"Timeout error when fetching {url}")
         return None, None
+
+
+async def get_crn_version(
+    session: aiohttp.ClientSession, node_url: str
+) -> Optional[str]:
+    # Retrieve the node version by scraping the main page
+    # TODO: add a version endpoint for CRNs.
+    _time, html_content = await measure_http_latency(
+        session=session, url=node_url, return_output=True, return_json=False
+    )
+    if html_content is None:
+        return None
+
+    soup = BeautifulSoup(html_content, "html.parser")
+    try:
+        return soup.find_all("section")[-1].p.i.text
+    except (IndexError, AttributeError) as e:
+        LOGGER.warning(f"Could not determine CRN version: {e}")
+        return None
 
 
 def get_url_domain(url: str) -> str:
@@ -164,14 +188,25 @@ def lookup_asn(
     return asn, asn_db.get_as_name(asn)
 
 
+class CcnBuildInfo(BaseModel):
+    python_version: str
+    version: str
+
+
 # Pydantic class to parse json to object
 class CcnApiMetricsResponse(BaseModel):
+    pyaleph_build_info: Optional[CcnBuildInfo] = None
     pyaleph_status_sync_pending_txs_total: Optional[int] = None
     pyaleph_status_sync_pending_messages_total: Optional[int] = None
     pyaleph_status_chain_eth_height_remaining_total: Optional[int] = None
 
     class Config:
         allow_population_by_field_name = True
+
+    def version(self) -> Optional[str]:
+        if self.pyaleph_build_info:
+            return self.pyaleph_build_info.version
+        return None
 
 
 async def get_ccn_metrics(
@@ -203,7 +238,7 @@ async def get_ccn_metrics(
         )
     )[0]
     time, json_text = await measure_http_latency(
-        session, f"{url}metrics.json", settings.HTTP_REQUEST_TIMEOUT, True
+        session, f"{url}metrics.json", settings.HTTP_REQUEST_TIMEOUT, return_output=True
     )
 
     if json_text is not None:
@@ -217,6 +252,7 @@ async def get_ccn_metrics(
         url=url,
         asn=asn,
         as_name=as_name,
+        version=json_object.version(),
         base_latency=base_latency,
         metrics_latency=metrics_latency,
         aggregate_latency=aggregate_latency,
@@ -234,6 +270,8 @@ async def get_crn_metrics(
     measured_at = datetime.utcnow()
 
     asn, as_name = lookup_asn(asn_db, url)
+
+    version = await get_crn_version(session=session, node_url=url)
 
     base_latency = (
         await measure_http_latency(
@@ -264,6 +302,7 @@ async def get_crn_metrics(
         url=url,
         asn=asn,
         as_name=as_name,
+        version=version,
         base_latency=base_latency,
         diagnostic_vm_latency=diagnostic_vm_latency,
         full_check_latency=full_check_latency,

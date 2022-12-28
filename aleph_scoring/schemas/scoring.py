@@ -9,6 +9,7 @@ Score = confloat(ge=0, le=1)
 class AlephNodeScore(BaseModel):
     node_id: str
     total_score: Score
+    version: Score
     base_latency: Score
     decentralization: Score
 

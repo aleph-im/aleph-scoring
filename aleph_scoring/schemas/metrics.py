@@ -9,6 +9,7 @@ class AlephNodeMetrics(BaseModel):
     url: str
     asn: Optional[int]
     as_name: Optional[str]
+    version: Optional[str]
     base_latency: Optional[float]
 
 

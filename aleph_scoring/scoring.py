@@ -1,17 +1,37 @@
-import itertools
+import logging
+import datetime as dt
 import logging
 import math
 from collections import defaultdict
 from datetime import datetime
-from typing import Sequence, List, Dict, Optional, Iterable, Collection
+from typing import List, Dict, Optional, Collection
 
+import pytz
+from packaging import version as semver
 import pandas as pd
+import requests
+from pydantic import BaseModel
 
 from .config import settings
 from .schemas.metrics import NodeMetrics, CcnMetrics, CrnMetrics, AlephNodeMetrics
 from .schemas.scoring import NodeScores, CcnScore, CrnScore
 
 LOGGER = logging.getLogger(__name__)
+
+
+class GithubRelease(BaseModel):
+    tag_name: str
+    name: str
+    created_at: dt.datetime
+    published_at: dt.datetime
+
+
+def get_latest_github_release(owner: str, repository: str) -> GithubRelease:
+    uri = f"https://api.github.com/repos/{owner}/{repository}/releases/latest"
+    response = requests.get(uri)
+    response.raise_for_status()
+
+    return GithubRelease.parse_raw(response.text)
 
 
 def score_latency(value: Optional[float]) -> float:
@@ -35,6 +55,41 @@ def score_eth_height_remaining(value: Optional[float]):
         value = 100_000
     value = max(int(value), 0)
     return 1 - (value / 100_000)
+
+
+def sanitize_semver(version: str) -> str:
+    items = version.split("-")
+    if len(items) == 1:
+        return version
+
+    # Accept -rc* or -dev and reject everything else
+    if items[1] == "dev" or items[1].startswith("rc"):
+        return f"{items[0]}-{items[1]}"
+
+    return items[0]
+
+
+def compute_version_score(version_str: Optional[str], latest_release: GithubRelease) -> float:
+    if version_str is None:
+        return 0.
+
+    sanitized_version_str = sanitize_semver(version_str)
+
+    version = semver.parse(sanitized_version_str)
+    latest_version = semver.parse(latest_release.tag_name)
+
+    if latest_version <= version:
+        return 1.
+
+    grace_period = settings.VERSION_SCORING_GRACE_PERIOD_DAYS
+    grace_period_end = latest_release.published_at + dt.timedelta(grace_period)
+    current_date = pytz.utc.localize(dt.datetime.utcnow())
+
+    if current_date <= grace_period_end:
+        return 1.
+
+    # TODO: implement the formula
+    return 0.
 
 
 def compute_ccn_score(df: pd.DataFrame):
@@ -121,7 +176,11 @@ def compute_decentralization_scores(
 def compute_ccn_score_no_pandas(
     ccn_metrics: CcnMetrics,
     decentralization_scores: Dict[Optional[int], float],
+    latest_release: GithubRelease,
 ) -> CcnScore:
+
+    version_score = compute_version_score(ccn_metrics.version, latest_release)
+
     score_base_latency = score_latency(ccn_metrics.base_latency)
     score_aggregate_latency = score_latency(ccn_metrics.aggregate_latency)
     score_file_download_latency = score_latency(ccn_metrics.file_download_latency)
@@ -141,6 +200,7 @@ def compute_ccn_score_no_pandas(
     return CcnScore(
         node_id=ccn_metrics.node_id,
         total_score=total_score,
+        version=version_score,
         base_latency=score_base_latency,
         decentralization=decentralization_scores[ccn_metrics.asn],
         aggregate_latency=score_aggregate_latency,
@@ -154,7 +214,11 @@ def compute_ccn_score_no_pandas(
 def compute_crn_score_no_pandas(
     crn_metrics: CrnMetrics,
     decentralization_scores: Dict[Optional[int], float],
+    latest_release: GithubRelease,
 ) -> CrnScore:
+
+    version_score = compute_version_score(crn_metrics.version, latest_release)
+
     score_base_latency = score_latency(crn_metrics.base_latency)
     score_diagnostic_vm_latency = score_latency(crn_metrics.diagnostic_vm_latency)
     score_full_check_latency = score_latency(crn_metrics.full_check_latency)
@@ -166,6 +230,7 @@ def compute_crn_score_no_pandas(
     return CrnScore(
         node_id=crn_metrics.node_id,
         total_score=total_score,
+        version=version_score,
         base_latency=score_base_latency,
         decentralization=decentralization_scores[crn_metrics.asn],
         diagnostic_vm_latency=score_diagnostic_vm_latency,
@@ -173,27 +238,34 @@ def compute_crn_score_no_pandas(
     )
 
 
-def compute_ccn_scores(ccn_metrics: Collection[CcnMetrics]) -> List[CcnScore]:
-    decentralization_scores = compute_decentralization_scores(ccn_metrics)
-    ccn_scores = [
-        compute_ccn_score_no_pandas(metrics, decentralization_scores)
-        for metrics in ccn_metrics
-    ]
-    return ccn_scores
-
-
-def compute_crn_scores(crn_metrics: Collection[CrnMetrics]) -> List[CrnScore]:
+def compute_crn_scores(
+    crn_metrics: Collection[CrnMetrics], latest_release: GithubRelease
+) -> List[CrnScore]:
     decentralization_scores = compute_decentralization_scores(crn_metrics)
     crn_scores = [
-        compute_crn_score_no_pandas(metrics, decentralization_scores)
+        compute_crn_score_no_pandas(metrics, decentralization_scores, latest_release)
         for metrics in crn_metrics
     ]
     return crn_scores
 
 
+def compute_ccn_scores(
+    ccn_metrics: Collection[CcnMetrics], latest_release: GithubRelease
+) -> List[CcnScore]:
+    decentralization_scores = compute_decentralization_scores(ccn_metrics)
+    ccn_scores = [
+        compute_ccn_score_no_pandas(metrics, decentralization_scores, latest_release)
+        for metrics in ccn_metrics
+    ]
+    return ccn_scores
+
+
 def compute_scores(node_metrics: NodeMetrics) -> NodeScores:
-    ccn_scores = compute_ccn_scores(node_metrics.ccn)
-    crn_scores = compute_crn_scores(node_metrics.crn)
+    latest_ccn_release = get_latest_github_release("aleph-im", "pyaleph")
+    latest_crn_release = get_latest_github_release("aleph-im", "aleph-vm")
+
+    ccn_scores = compute_ccn_scores(node_metrics.ccn, latest_ccn_release)
+    crn_scores = compute_crn_scores(node_metrics.crn, latest_crn_release)
 
     return NodeScores(
         ccn=ccn_scores,

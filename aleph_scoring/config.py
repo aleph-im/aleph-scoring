@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     HTTP_REQUEST_TIMEOUT: float = 2.0
     LOGGING_LEVEL: int = logging.DEBUG
     SENTRY_DSN: Optional[str] = None
+    VERSION_SCORING_GRACE_PERIOD_DAYS: int = 14
 
     @property
     def node_data_url(self):

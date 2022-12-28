@@ -4,6 +4,7 @@ aiosignal==1.2.0
 git+https://github.com/aleph-im/aleph-client@132fbdccec6bdabe5f8e2b3c1c24ce5968dc83a3
 async-timeout==4.0.2
 attrs==21.4.0
+beautifulsoup4==4.11.1
 black==22.1.0
 certifi==2021.10.8
 charset-normalizer==2.0.12
