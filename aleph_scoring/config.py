@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     ALEPH_POST_TYPE_CHANNEL: Optional[str] = "aleph-scoring"
     ALEPH_POST_TYPE_METRICS: str = "test-aleph-scoring-metrics"
     ALEPH_POST_TYPE_SCORES: str = "test-aleph-scoring-scores"
+    ASN_DB_REFRESH_PERIOD_DAYS: int = 1
     EXPORT_DATAFRAME: bool = False
     ETHEREUM_PRIVATE_KEY: str = (
         "0x95c6bc829ddf6a83b5d8b228db2942fe828802fb63f412586ea7c2d0036b4020"

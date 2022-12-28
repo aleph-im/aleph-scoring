@@ -15,13 +15,13 @@ import datetime as dt
 import re
 import json
 
+from aleph_scoring.config import settings
 
 Server = NewType("Server", str)
 
 LOGGER = logging.getLogger(__name__)
 EXTRACT_ASNAME_C: Final = re.compile(r"<a .+>AS(?P<code>.+?)\s*</a>\s*(?P<name>.*)", re.U)
 _asn_db: Optional[pyasn.pyasn] = None
-_last_refresh = dt.datetime.min
 
 
 # Imported from pyasn_util_download.py
@@ -152,20 +152,37 @@ def update_names_file(names_file: Path):
         f.write(json.dumps(asnames_dict))
 
 
+def should_update_asn_db(asn_db_file: Path) -> bool:
+    if not asn_db_file.exists():
+        LOGGER.debug("ASN DB file does not exist, downloading it.")
+        return True
+
+    last_update_time = dt.datetime.fromtimestamp(asn_db_file.stat().st_mtime)
+    if dt.datetime.now() > last_update_time + dt.timedelta(days=settings.ASN_DB_REFRESH_PERIOD_DAYS):
+        LOGGER.debug("ASN DB file is outdated, updating it.")
+        return True
+
+    return False
+
+
 def get_asn_database() -> pyasn.pyasn:
     global _asn_db
-    global _last_refresh
 
-    if _asn_db is None or dt.datetime.utcnow() > _last_refresh + dt.timedelta(days=1):
+    asn_db_file = Path.cwd() / "asn_db"
+    as_names_files = Path.cwd() / "asnames.json"
+
+    should_update_db = should_update_asn_db(asn_db_file)
+
+    if should_update_db:
         asn_archive_file = Path.cwd() / "asn_db.bz2"
-        asn_db_file = Path.cwd() / "asn_db"
-        as_names_files = Path.cwd() / "asnames.json"
 
-        # update_asn_database(asn_archive_file)
-        # convert_asn_database(asn_archive_file, asn_db_file)
-        # update_names_file(as_names_files)
+        update_asn_database(asn_archive_file)
+        convert_asn_database(asn_archive_file, asn_db_file)
+        update_names_file(as_names_files)
 
         _asn_db = pyasn.pyasn(asn_db_file.name, as_names_file=str(as_names_files))
-        _last_refresh = dt.datetime.utcnow()
+
+    if should_update_db or _asn_db is None:
+        _asn_db = pyasn.pyasn(asn_db_file.name, as_names_file=str(as_names_files))
 
     return _asn_db
