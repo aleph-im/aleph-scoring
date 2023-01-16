@@ -119,9 +119,10 @@ def compute_ccn_score(df: pd.DataFrame):
         * scores["score_metrics_latency"]
         * scores["score_aggregate_latency"]
         * scores["score_file_download_latency"]
-        * scores["score_pending_messages"]
+        # Ignore pending messages for now in the score computation
+        # * scores["score_pending_messages"]
         # * scores["eth_height_remaining"]
-    ) ** (1 / 5.0)
+    ) ** (1 / 4.0)
     return scores
 
 
@@ -194,8 +195,9 @@ def compute_ccn_score_no_pandas(
         * score_file_download_latency
         * score_metrics_latency
         * score_eth_height
-        * score_pending
-    ) ** (1 / 6)
+        # Ignore pending messages for now in the score computation
+        # * score_pending
+    ) ** (1 / 4)
 
     return CcnScore(
         node_id=ccn_metrics.node_id,
