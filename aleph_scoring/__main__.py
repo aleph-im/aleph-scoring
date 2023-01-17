@@ -6,6 +6,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional, Dict
 
+import aiohttp
 import pandas as pd
 import schedule
 import sentry_sdk
@@ -86,27 +87,30 @@ async def publish_on_aleph(node_metrics: NodeMetrics, node_scores: NodeScores):
     channel = settings.ALEPH_POST_TYPE_CHANNEL
     aleph_api_server = settings.NODE_DATA_HOST
 
-    metrics_post_data = MetricsPost(tags=["mainnet"], metrics=node_metrics)
-    metrics_post = await create_post(
-        account=account,
-        post_content=metrics_post_data,
-        post_type=settings.ALEPH_POST_TYPE_METRICS,
-        channel=channel,
-        api_server=aleph_api_server,
-    )
-    logger.debug("Published metrics on Aleph: %s", metrics_post.item_hash)
+    async with aiohttp.ClientSession() as session:
+        metrics_post_data = MetricsPost(tags=["mainnet"], metrics=node_metrics)
+        metrics_post = await create_post(
+            account=account,
+            post_content=metrics_post_data,
+            post_type=settings.ALEPH_POST_TYPE_METRICS,
+            channel=channel,
+            api_server=aleph_api_server,
+            session=session,
+        )
+        logger.debug("Published metrics on Aleph: %s", metrics_post.item_hash)
 
-    scores_post_data = NodeScoresPost(
-        tags=["mainnet"], metrics_post=metrics_post.item_hash, scores=node_scores
-    )
-    scores_post = await create_post(
-        account=account,
-        post_content=scores_post_data,
-        post_type=settings.ALEPH_POST_TYPE_SCORES,
-        channel=channel,
-        api_server=aleph_api_server,
-    )
-    logger.debug("Published scores on Aleph: %s", scores_post.item_hash)
+        scores_post_data = NodeScoresPost(
+            tags=["mainnet"], metrics_post=metrics_post.item_hash, scores=node_scores
+        )
+        scores_post = await create_post(
+            account=account,
+            post_content=scores_post_data,
+            post_type=settings.ALEPH_POST_TYPE_SCORES,
+            channel=channel,
+            api_server=aleph_api_server,
+            session=session,
+        )
+        logger.debug("Published scores on Aleph: %s", scores_post.item_hash)
 
 
 def run_scoring(format: OutputFormat, output_file: Optional[Path], post_on_aleph: bool):
