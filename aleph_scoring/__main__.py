@@ -34,7 +34,7 @@ class OutputFormat(str, Enum):
 
 
 def save_as_json(node_metrics: NodeMetrics, file: Path):
-    with file.open(mode='w') as f:
+    with file.open(mode="w") as f:
         f.write(node_metrics.json(indent=4))
 
 
