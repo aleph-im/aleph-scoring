@@ -217,103 +217,108 @@ class CcnApiMetricsResponse(BaseModel):
 
 
 async def get_ccn_metrics(
-    session: aiohttp.ClientSession, asn_db: pyasn.pyasn, node_info: NodeInfo
+    timeout: aiohttp.ClientTimeout, asn_db: pyasn.pyasn, node_info: NodeInfo
 ) -> CcnMetrics:
     url = node_info.url.url
     measured_at = datetime.utcnow()
 
     asn, as_name = lookup_asn(asn_db, url)
 
-    base_latency = (
-        await measure_http_latency(session, f"{url}api/v0/info/public.json")
-    )[0]
-    metrics_latency = (
-        await measure_http_latency(
-            session, f"{url}metrics.json", settings.HTTP_REQUEST_TIMEOUT
-        )
-    )[0]
-    aggregate_latency = (
-        await measure_http_latency(
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        base_latency = (
+            await measure_http_latency(session, f"{url}api/v0/info/public.json")
+        )[0]
+        metrics_latency = (
+            await measure_http_latency(
+                session, f"{url}metrics.json", settings.HTTP_REQUEST_TIMEOUT
+            )
+        )[0]
+        aggregate_latency = (
+            await measure_http_latency(
+                session,
+                "".join(CCN_AGGREGATE_PATH).format(url=url),
+            )
+        )[0]
+        file_download_latency = (
+            await measure_http_latency(
+                session,
+                "".join(CCN_FILE_DOWNLOAD_PATH).format(url=url),
+            )
+        )[0]
+        time, json_text = await measure_http_latency(
             session,
-            "".join(CCN_AGGREGATE_PATH).format(url=url),
+            f"{url}metrics.json",
+            settings.HTTP_REQUEST_TIMEOUT,
+            return_output=True,
         )
-    )[0]
-    file_download_latency = (
-        await measure_http_latency(
-            session,
-            "".join(CCN_FILE_DOWNLOAD_PATH).format(url=url),
+
+        if json_text is not None:
+            json_object = CcnApiMetricsResponse(**json_text)
+        else:
+            json_object = CcnApiMetricsResponse()
+
+        return CcnMetrics(
+            measured_at=measured_at.timestamp(),
+            node_id=node_info.hash,
+            url=url,
+            asn=asn,
+            as_name=as_name,
+            version=json_object.version(),
+            base_latency=base_latency,
+            metrics_latency=metrics_latency,
+            aggregate_latency=aggregate_latency,
+            file_download_latency=file_download_latency,
+            txs_total=json_object.pyaleph_status_sync_pending_txs_total,
+            pending_messages=json_object.pyaleph_status_sync_pending_messages_total,  # noqa:E501
+            eth_height_remaining=json_object.pyaleph_status_chain_eth_height_remaining_total,
         )
-    )[0]
-    time, json_text = await measure_http_latency(
-        session, f"{url}metrics.json", settings.HTTP_REQUEST_TIMEOUT, return_output=True
-    )
-
-    if json_text is not None:
-        json_object = CcnApiMetricsResponse(**json_text)
-    else:
-        json_object = CcnApiMetricsResponse()
-
-    return CcnMetrics(
-        measured_at=measured_at.timestamp(),
-        node_id=node_info.hash,
-        url=url,
-        asn=asn,
-        as_name=as_name,
-        version=json_object.version(),
-        base_latency=base_latency,
-        metrics_latency=metrics_latency,
-        aggregate_latency=aggregate_latency,
-        file_download_latency=file_download_latency,
-        txs_total=json_object.pyaleph_status_sync_pending_txs_total,
-        pending_messages=json_object.pyaleph_status_sync_pending_messages_total,  # noqa:E501
-        eth_height_remaining=json_object.pyaleph_status_chain_eth_height_remaining_total,
-    )
 
 
 async def get_crn_metrics(
-    session: aiohttp.ClientSession, asn_db: pyasn.pyasn, node_info: NodeInfo
+    timeout: aiohttp.ClientTimeout, asn_db: pyasn.pyasn, node_info: NodeInfo
 ) -> CrnMetrics:
     url = node_info.url.url
     measured_at = datetime.utcnow()
 
     asn, as_name = lookup_asn(asn_db, url)
 
-    version = await get_crn_version(session=session, node_url=url)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        version = await get_crn_version(session=session, node_url=url)
 
-    base_latency = (
-        await measure_http_latency(
-            session,
-            f"{url}about/login",
-            expected_status=401,
-        )
-    )[0]
+        base_latency = (
+            await measure_http_latency(
+                session,
+                f"{url}about/login",
+                expected_status=401,
+            )
+        )[0]
 
-    diagnostic_vm_latency = (
-        await measure_http_latency(
-            session,
-            "".join(CRN_DIAGNOSTIC_VM_PATH).format(url=url),
-            timeout_seconds=10,
-        )
-    )[0]
-    full_check_latency = (
-        await measure_http_latency(
-            session,
-            f"{url}status/check/fastapi",
-            timeout_seconds=20,
-        )
-    )[0]
+        diagnostic_vm_latency = (
+            await measure_http_latency(
+                session,
+                "".join(CRN_DIAGNOSTIC_VM_PATH).format(url=url),
+                timeout_seconds=10,
+            )
+        )[0]
+        full_check_latency = (
+            await measure_http_latency(
+                session,
+                f"{url}status/check/fastapi",
+                timeout_seconds=20,
+            )
+        )[0]
 
-    return CrnMetrics(
-        measured_at=measured_at.timestamp(),
-        node_id=node_info.hash,
-        url=url,
-        asn=asn,
-        as_name=as_name,
-        version=version,
-        base_latency=base_latency,
-        diagnostic_vm_latency=diagnostic_vm_latency,
-        full_check_latency=full_check_latency,
-    )
+        return CrnMetrics(
+            measured_at=measured_at.timestamp(),
+            node_id=node_info.hash,
+            url=url,
+            asn=asn,
+            as_name=as_name,
+            version=version,
+            base_latency=base_latency,
+            diagnostic_vm_latency=diagnostic_vm_latency,
+            full_check_latency=full_check_latency,
+        )
 
 
 M = TypeVar("M", bound=AlephNodeMetrics)
@@ -322,17 +327,16 @@ M = TypeVar("M", bound=AlephNodeMetrics)
 async def collect_node_metrics(
     node_infos: Iterable[NodeInfo],
     metrics_function: Callable[
-        [aiohttp.ClientSession, pyasn.pyasn, NodeInfo], Awaitable[M]
+        [aiohttp.ClientTimeout, pyasn.pyasn, NodeInfo], Awaitable[M]
     ],
 ) -> Sequence[Union[M, BaseException]]:
     asn_db = get_asn_database()
     timeout = aiohttp.ClientTimeout(
         total=60.0, connect=2.0, sock_connect=2.0, sock_read=60.0
     )
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        return await asyncio.gather(
-            *[metrics_function(session, asn_db, node_info) for node_info in node_infos]
-        )
+    return await asyncio.gather(
+        *[metrics_function(timeout, asn_db, node_info) for node_info in node_infos]
+    )
 
 
 async def collect_all_ccn_metrics(node_data: Dict[str, Any]) -> Sequence[CcnMetrics]:
