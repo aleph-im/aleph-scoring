@@ -116,11 +116,10 @@ def run_scoring(format: OutputFormat, output_file: Optional[Path], post_on_aleph
     node_metrics = measure_node_performance_sync()
     node_scores = compute_scores(node_metrics)
 
-    if format == OutputFormat.JSON:
-        print(node_scores.dict())
-
     if output_file:
         save_to_file(node_metrics=node_metrics, file=output_file, format=format)
+    elif format == OutputFormat.JSON:
+        print(node_scores.json())
 
     if post_on_aleph:
         asyncio.run(
