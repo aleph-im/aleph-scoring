@@ -5,7 +5,6 @@ import socket
 import time
 from datetime import datetime
 from pathlib import Path
-from bs4 import BeautifulSoup
 from typing import (
     Any,
     Dict,
@@ -15,6 +14,7 @@ from typing import (
     Tuple,
     Callable,
     Iterable,
+    List,
     Union,
     TypeVar,
     Awaitable,
@@ -144,19 +144,26 @@ async def measure_http_latency(
 async def get_crn_version(
     session: aiohttp.ClientSession, node_url: str
 ) -> Optional[str]:
-    # Retrieve the node version by scraping the main page
-    # TODO: add a version endpoint for CRNs.
-    _time, html_content = await measure_http_latency(
-        session=session, url=node_url, return_output=True, return_json=False
-    )
-    if html_content is None:
-        return None
-
-    soup = BeautifulSoup(html_content, "html.parser")
+    # Retrieve the CRN version from header `server`.
     try:
-        return soup.find_all("section")[-1].p.i.text
-    except (IndexError, AttributeError) as e:
-        LOGGER.warning(f"Could not determine CRN version: {e}")
+        async with async_timeout.timeout(
+            settings.HTTP_REQUEST_TIMEOUT,
+        ):
+            async with session.get(node_url) as resp:
+                resp.raise_for_status()
+                print(resp.headers)
+                for server in resp.headers.getall("Server"):
+                    print("VERSION", [node_url, server])
+                    version: List[str] = re.findall(r"^aleph-vm/(.*)$", server)
+                    if version and version[0]:
+                        return version[0]
+                else:
+                    return None
+    except (aiohttp.ClientResponseError, aiohttp.ClientConnectorError):
+        LOGGER.debug(f"Error when fetching version from {node_url}")
+        return None
+    except asyncio.TimeoutError:
+        LOGGER.debug(f"Timeout error when fetching version from  {node_url}")
         return None
 
 
