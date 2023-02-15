@@ -1,26 +1,27 @@
 """
 Utils to download and maintain the ASN database.
 """
+import datetime as dt
+import json
 import logging
+import re
 from ftplib import FTP
 from pathlib import Path
 from time import time
-from typing import Literal, NewType, Tuple, Dict, Final, Optional
+from typing import Dict, Final, Literal, NewType, Optional, Tuple
 
 import pyasn
 import requests
 from pyasn import mrtx
-
-import datetime as dt
-import re
-import json
 
 from aleph_scoring.config import settings
 
 Server = NewType("Server", str)
 
 LOGGER = logging.getLogger(__name__)
-EXTRACT_ASNAME_C: Final = re.compile(r"<a .+>AS(?P<code>.+?)\s*</a>\s*(?P<name>.*)", re.U)
+EXTRACT_ASNAME_C: Final = re.compile(
+    r"<a .+>AS(?P<code>.+?)\s*</a>\s*(?P<name>.*)", re.U
+)
 _asn_db: Optional[pyasn.pyasn] = None
 
 
@@ -158,7 +159,9 @@ def should_update_asn_db(asn_db_file: Path) -> bool:
         return True
 
     last_update_time = dt.datetime.fromtimestamp(asn_db_file.stat().st_mtime)
-    if dt.datetime.now() > last_update_time + dt.timedelta(days=settings.ASN_DB_REFRESH_PERIOD_DAYS):
+    if dt.datetime.now() > last_update_time + dt.timedelta(
+        days=settings.ASN_DB_REFRESH_PERIOD_DAYS
+    ):
         LOGGER.debug("ASN DB file is outdated, updating it.")
         return True
 

@@ -4,34 +4,32 @@ import re
 import socket
 import time
 from datetime import datetime
-from pathlib import Path
 from typing import (
     Any,
+    Awaitable,
+    Callable,
     Dict,
     Generator,
-    Literal,
-    Optional,
-    Tuple,
-    Callable,
     Iterable,
     List,
-    Union,
-    TypeVar,
-    Awaitable,
+    Literal,
+    Optional,
     Sequence,
+    Tuple,
+    TypeVar,
+    Union,
 )
 from urllib.parse import urlparse
 
 import aiohttp
 import async_timeout
-import pandas as pd
 import pyasn
 from pydantic import BaseModel, validator
 from urllib3.util import Url, parse_url
 
 from .asn import get_asn_database
 from .config import settings
-from .schemas.metrics import CcnMetrics, CrnMetrics, AlephNodeMetrics, NodeMetrics
+from .schemas.metrics import AlephNodeMetrics, CcnMetrics, CrnMetrics, NodeMetrics
 
 LOGGER = logging.getLogger(__name__)
 

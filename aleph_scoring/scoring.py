@@ -1,20 +1,19 @@
-import logging
 import datetime as dt
 import logging
 import math
 from collections import defaultdict
 from datetime import datetime
-from typing import List, Dict, Optional, Collection
+from typing import Collection, Dict, List, Optional
 
-import pytz
-from packaging import version as semver
 import pandas as pd
+import pytz
 import requests
+from packaging import version as semver
 from pydantic import BaseModel
 
 from .config import settings
-from .schemas.metrics import NodeMetrics, CcnMetrics, CrnMetrics, AlephNodeMetrics
-from .schemas.scoring import NodeScores, CcnScore, CrnScore
+from .schemas.metrics import AlephNodeMetrics, CcnMetrics, CrnMetrics, NodeMetrics
+from .schemas.scoring import CcnScore, CrnScore, NodeScores
 
 LOGGER = logging.getLogger(__name__)
 
@@ -69,9 +68,11 @@ def sanitize_semver(version: str) -> str:
     return items[0]
 
 
-def compute_version_score(version_str: Optional[str], latest_release: GithubRelease) -> float:
+def compute_version_score(
+    version_str: Optional[str], latest_release: GithubRelease
+) -> float:
     if version_str is None:
-        return 0.
+        return 0.0
 
     sanitized_version_str = sanitize_semver(version_str)
 
@@ -79,17 +80,17 @@ def compute_version_score(version_str: Optional[str], latest_release: GithubRele
     latest_version = semver.parse(latest_release.tag_name)
 
     if latest_version <= version:
-        return 1.
+        return 1.0
 
     grace_period = settings.VERSION_SCORING_GRACE_PERIOD_DAYS
     grace_period_end = latest_release.published_at + dt.timedelta(grace_period)
     current_date = pytz.utc.localize(dt.datetime.utcnow())
 
     if current_date <= grace_period_end:
-        return 1.
+        return 1.0
 
     # TODO: implement the formula
-    return 0.
+    return 0.0
 
 
 def compute_ccn_score(df: pd.DataFrame):
@@ -179,7 +180,6 @@ def compute_ccn_score_no_pandas(
     decentralization_scores: Dict[Optional[int], float],
     latest_release: GithubRelease,
 ) -> CcnScore:
-
     version_score = compute_version_score(ccn_metrics.version, latest_release)
 
     score_base_latency = score_latency(ccn_metrics.base_latency)
@@ -218,7 +218,6 @@ def compute_crn_score_no_pandas(
     decentralization_scores: Dict[Optional[int], float],
     latest_release: GithubRelease,
 ) -> CrnScore:
-
     version_score = compute_version_score(crn_metrics.version, latest_release)
 
     score_base_latency = score_latency(crn_metrics.base_latency)

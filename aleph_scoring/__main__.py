@@ -4,7 +4,7 @@ import os
 import time
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Dict, Optional
 
 import pandas as pd
 import schedule
@@ -16,8 +16,8 @@ from click import BadParameter
 from hexbytes import HexBytes
 
 from aleph_scoring.config import settings
-from aleph_scoring.metrics import measure_node_performance_sync, MetricsLogKey
-from aleph_scoring.schemas.metrics import NodeMetrics, MetricsPost
+from aleph_scoring.metrics import MetricsLogKey, measure_node_performance_sync
+from aleph_scoring.schemas.metrics import MetricsPost, NodeMetrics
 from aleph_scoring.schemas.scoring import NodeScores, NodeScoresPost
 from aleph_scoring.scoring import compute_scores
 
@@ -181,7 +181,6 @@ def run_on_schedule(
         help="Whether to save the results on Aleph. Only usable in combination with --format json.",
     ),
 ):
-
     run_scoring(format=format, output_file=output_file, post_on_aleph=post_on_aleph)
     schedule.every(settings.DAEMON_MODE_PERIOD_HOURS).hours.at(":00").do(
         run_scoring,
