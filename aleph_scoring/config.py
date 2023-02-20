@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     ETHEREUM_PRIVATE_KEY: str = (
         "0x95c6bc829ddf6a83b5d8b228db2942fe828802fb63f412586ea7c2d0036b4020"
     )
-    HTTP_REQUEST_TIMEOUT: float = 2.0
+    HTTP_REQUEST_TIMEOUT: float = 10.0
     LOGGING_LEVEL: int = logging.DEBUG
     SENTRY_DSN: Optional[str] = None
     VERSION_SCORING_GRACE_PERIOD_DAYS: int = 14
