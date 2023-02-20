@@ -10,14 +10,15 @@ import pandas as pd
 import schedule
 import sentry_sdk
 import typer
-from aleph_client.asynchronous import create_post
-from aleph_client.chains.ethereum import ETHAccount
+from aleph.sdk.chains.ethereum import ETHAccount
+from aleph.sdk.user_session import AuthenticatedUserSession, UserSession
+from aleph_message.models import ItemHash, MessageType, PostMessage
 from click import BadParameter
 from hexbytes import HexBytes
 
 from aleph_scoring.config import settings
 from aleph_scoring.metrics import MetricsLogKey, measure_node_performance_sync
-from aleph_scoring.schemas.metrics import MetricsPost, NodeMetrics
+from aleph_scoring.schemas.metrics import CrnMetrics, MetricsPost, NodeMetrics
 from aleph_scoring.schemas.scoring import NodeScores, NodeScoresPost
 from aleph_scoring.scoring import compute_scores
 
@@ -81,30 +82,29 @@ def get_aleph_account():
 
 
 async def publish_on_aleph(node_metrics: NodeMetrics, node_scores: NodeScores):
-    account = get_aleph_account()
-
     channel = settings.ALEPH_POST_TYPE_CHANNEL
     aleph_api_server = settings.NODE_DATA_HOST
 
+    aleph_session = AuthenticatedUserSession(
+        account=get_aleph_account(),
+        api_server=aleph_api_server,
+    )
+
     metrics_post_data = MetricsPost(tags=["mainnet"], metrics=node_metrics)
-    metrics_post = await create_post(
-        account=account,
+    metrics_post, _ = await aleph_session.create_post(
         post_content=metrics_post_data,
         post_type=settings.ALEPH_POST_TYPE_METRICS,
         channel=channel,
-        api_server=aleph_api_server,
     )
     logger.debug("Published metrics on Aleph: %s", metrics_post.item_hash)
 
     scores_post_data = NodeScoresPost(
         tags=["mainnet"], metrics_post=metrics_post.item_hash, scores=node_scores
     )
-    scores_post = await create_post(
-        account=account,
+    scores_post, _ = await aleph_session.create_post(
         post_content=scores_post_data,
         post_type=settings.ALEPH_POST_TYPE_SCORES,
         channel=channel,
-        api_server=aleph_api_server,
     )
     logger.debug("Published scores on Aleph: %s", scores_post.item_hash)
 
