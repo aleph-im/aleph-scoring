@@ -202,9 +202,10 @@ def export_as_html(input_file: Optional[Path]):
 
 def main():
     logging.basicConfig(level=settings.LOGGING_LEVEL)
-    sentry_sdk.init(
-        settings.SENTRY_DSN,
-    )
+    if settings.SENTRY_DSN:
+        sentry_sdk.init(
+            settings.SENTRY_DSN,
+        )
     app()
 
 
