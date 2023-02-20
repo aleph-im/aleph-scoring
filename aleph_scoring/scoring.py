@@ -8,6 +8,7 @@ from typing import Collection, Dict, List, Optional
 import pandas as pd
 import pytz
 import requests
+from cachetools import TTLCache, cached
 from packaging import version as semver
 from pydantic import BaseModel
 
@@ -25,6 +26,8 @@ class GithubRelease(BaseModel):
     published_at: dt.datetime
 
 
+# Cache requests to GitHub to avoid reaching rate limiting.
+@cached(cache=TTLCache(maxsize=1, ttl=600))
 def get_latest_github_release(owner: str, repository: str) -> GithubRelease:
     uri = f"https://api.github.com/repos/{owner}/{repository}/releases/latest"
     response = requests.get(uri)
