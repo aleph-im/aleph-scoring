@@ -330,7 +330,7 @@ async def collect_node_metrics(
 ) -> Sequence[Union[M, BaseException]]:
     asn_db = get_asn_database()
     timeout = aiohttp.ClientTimeout(
-        total=60.0, connect=2.0, sock_connect=2.0, sock_read=60.0
+        total=60.0, connect=10.0, sock_connect=10.0, sock_read=60.0
     )
     return await asyncio.gather(
         *[metrics_function(timeout, asn_db, node_info) for node_info in node_infos]
