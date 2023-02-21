@@ -6,7 +6,7 @@ SELECT
     COUNT(*) OVER (PARTITION BY node->'asn') AS nodes_with_identical_asn
 
 FROM
-    posts, jsonb_array_elements(content->'metrics'->'crn') node
+    posts, jsonb_array_elements(content->'metrics'->'ccn') node
 WHERE
     owner = $1
     AND type = 'aleph-scoring-metrics'

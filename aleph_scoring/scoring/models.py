@@ -27,12 +27,16 @@ class CrnMeasurements(BaseNodeMeasurements):
 
 
 class CcnMeasurements(BaseNodeMeasurements):
-    ...
-    # aggregate_latency: Score
-    # file_download_latency: Score
-    # metrics_endpoint_latency: Score
-    # eth_height_remaining: Score
-    # pending_messages: Score
+    base_latency_score_p25: float
+    base_latency_score_p95: float
+    metrics_latency_score_p25: float
+    metrics_latency_score_p95: float
+    aggregate_latency_score_p25: float
+    aggregate_latency_score_p95: float
+    file_download_latency_score_p25: float
+    file_download_latency_score_p95: float
+    eth_height_remaining_score_p25: float
+    eth_height_remaining_score_p95: float
 
 
 class AlephNodeScore(BaseModel):
