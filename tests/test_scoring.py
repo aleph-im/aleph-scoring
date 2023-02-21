@@ -1,20 +1,30 @@
-import pytz
-
-from aleph_scoring.schemas.metrics import CrnMetrics, CcnMetrics
 import datetime as dt
 
+import pytest
+
+from aleph_scoring.metrics import CcnMetrics, CrnMetrics
 from aleph_scoring.scoring import (
-    compute_crn_scores,
+    GithubRelease,
     compute_ccn_scores,
-    compute_version_score,
-    GithubRelease, sanitize_semver,
+    compute_crn_scores,
+    sanitize_semver,
 )
 
 
-def test_scoring_ccn():
+@pytest.fixture
+def latest_release():
+    return GithubRelease(
+        tag_name="0.2.5",
+        name="aleph-vm",
+        created_at=dt.datetime(2022, 10, 6),
+        published_at=dt.datetime(2022, 10, 6),
+    )
+
+
+def test_scoring_ccn(latest_release):
     ccn_metrics = [
         CcnMetrics(
-            measured_at=dt.datetime(2022, 12, 26),
+            measured_at=dt.datetime(2022, 12, 26).timestamp(),
             node_id="1",
             url="https://api1.aleph.im",
             asn=1,
@@ -27,7 +37,7 @@ def test_scoring_ccn():
             eth_height_remaining=0,
         ),
         CcnMetrics(
-            measured_at=dt.datetime(2022, 12, 26),
+            measured_at=dt.datetime(2022, 12, 26).timestamp(),
             node_id="2",
             url="https://api2.aleph.im",
             asn=2,
@@ -41,14 +51,14 @@ def test_scoring_ccn():
         ),
     ]
 
-    ccn_scores = compute_ccn_scores(ccn_metrics)
+    ccn_scores = compute_ccn_scores(ccn_metrics, latest_release=latest_release)
     assert len(ccn_scores) == 2
     assert ccn_scores[0].decentralization == 0.5
 
 
-def test_scoring_crn():
+def test_scoring_crn(latest_release):
     crn_metrics = CrnMetrics(
-        measured_at=dt.datetime(2022, 12, 26),
+        measured_at=dt.datetime(2022, 12, 26).timestamp(),
         node_id="1234",
         url="https://aleph.sh",
         asn=1,
@@ -58,7 +68,7 @@ def test_scoring_crn():
         full_check_latency=0.7,
     )
 
-    crn_scores = compute_crn_scores([crn_metrics])
+    crn_scores = compute_crn_scores([crn_metrics], latest_release=latest_release)
     assert len(crn_scores) == 1
     crn_score = crn_scores[0]
 

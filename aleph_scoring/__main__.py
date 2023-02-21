@@ -1,6 +1,7 @@
 import asyncio.exceptions
 import logging
 import os
+import sys
 import time
 from enum import Enum
 from pathlib import Path
@@ -12,15 +13,14 @@ import sentry_sdk
 import typer
 from aleph.sdk.chains.ethereum import ETHAccount
 from aleph.sdk.user_session import AuthenticatedUserSession, UserSession
-from aleph_message.models import ItemHash, MessageType, PostMessage
+from aleph_message.models import MessageType, PostMessage
 from click import BadParameter
 from hexbytes import HexBytes
 
 from aleph_scoring.config import settings
 from aleph_scoring.metrics import MetricsLogKey, measure_node_performance_sync
-from aleph_scoring.schemas.metrics import CrnMetrics, MetricsPost, NodeMetrics
-from aleph_scoring.schemas.scoring import NodeScores, NodeScoresPost
-from aleph_scoring.scoring import compute_scores
+from aleph_scoring.metrics.models import MetricsPost, NodeMetrics
+from aleph_scoring.scoring import NodeScores, NodeScoresPost, compute_scores
 
 app = typer.Typer()
 

@@ -27,9 +27,10 @@ import pyasn
 from pydantic import BaseModel, validator
 from urllib3.util import Url, parse_url
 
-from .asn import get_asn_database
-from .config import settings
-from .schemas.metrics import AlephNodeMetrics, CcnMetrics, CrnMetrics, NodeMetrics
+from aleph_scoring.config import settings
+from aleph_scoring.metrics.asn import get_asn_database
+
+from .models import AlephNodeMetrics, CcnMetrics, CrnMetrics, NodeMetrics
 
 LOGGER = logging.getLogger(__name__)
 
@@ -90,8 +91,11 @@ def get_compute_resource_node_urls(
         if addr:
             if not addr.startswith("https://"):
                 addr = "https://" + addr
+            url: Url = parse_url(addr + "/")
+            if url.query:
+                LOGGER.warning("Unsupported url for node %s", node["hash"])
             yield NodeInfo(
-                url=parse_url(addr + "/"),
+                url=url,
                 hash=node["hash"],
             )
 

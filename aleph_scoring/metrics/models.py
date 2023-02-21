@@ -10,6 +10,7 @@ class AlephNodeMetrics(BaseModel):
     asn: Optional[int]
     as_name: Optional[str]
     version: Optional[str]
+    days_outdated: Optional[int]
     base_latency: Optional[float]
 
 
