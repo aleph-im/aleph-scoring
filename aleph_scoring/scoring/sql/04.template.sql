@@ -1,14 +1,5 @@
 SELECT
-    crn->'node_id' as node_id,
-    crn->'url' as node_url,
-
-    /*
-    percentile_cont(0.25) WITHIN GROUP (ORDER BY (crn->'base_latency')::float) as base_latency_percentile_25,
-    percentile_cont(0.50) WITHIN GROUP (ORDER BY (crn->'base_latency')::float) as base_latency_percentile_50,
-    percentile_cont(0.75) WITHIN GROUP (ORDER BY (crn->'base_latency')::float) as base_latency_percentile_75,
-    percentile_cont(0.95) WITHIN GROUP (ORDER BY (crn->'base_latency')::float) as base_latency_percentile_95,
-    percentile_cont(0.99) WITHIN GROUP (ORDER BY (crn->'base_latency')::float) as base_latency_percentile_99,
-    */
+    crn->>'node_id' as node_id,
 
     count((crn->'base_latency')::float > 0) as base_latency_present,
     count(case when (crn->'base_latency')::float is null then 1 end) as base_latency_missing,
@@ -50,21 +41,22 @@ SELECT
     count((crn->'full_check_latency')::float > 0) as full_check_latency_present,
     count(case when (crn->'full_check_latency')::float is null then 1 end) as full_check_latency_missing,
 
---     count(case when (crn->'version')::text = '0.2.5' then 1 end) as node_version
-    count(case when (crn->>'version' = '0.2.5') then 1 end) as node_version_latest,
-    count(case when (coalesce(crn->>'version', '') = '') then 1 end) as node_version_missing,
+    count(case when (crn->>'version' = $1) then 1 end) as node_version_latest,
     count(case when (
-        crn->>'version' != '0.2.5' and
-        to_timestamp((crn->'measured_at')::float)::date > '2022-10-06'::date
-    ) then 1 end) as node_version_outdated
+        crn->>'version' = $6 and
+        to_timestamp((crn->'measured_at')::float)::date <= $2::date
+    ) then 1 end) as node_version_outdated,
+    count(case when (
+        crn->>'version' != $1 and
+        to_timestamp((crn->'measured_at')::float)::date > $2::date
+    ) then 1 end) as node_version_obsolete,
+    count(case when (coalesce(crn->>'version', '') = '') then 1 end) as node_version_missing
 FROM
     posts, jsonb_array_elements(content->'metrics'->'crn') crn
 WHERE
-    owner = '0x4d741d44348B21e97000A8C9f07Ee34110F7916F'
+    owner = $3
     AND type = 'aleph-scoring-metrics'
-    AND to_timestamp((crn->'measured_at')::float)::date > '2023-01-30'::date
+    AND to_timestamp((crn->'measured_at')::float)::date > $4::date
+    AND to_timestamp((crn->'measured_at')::float)::date < $5::date
 GROUP BY
-    crn->'node_id',
-    crn->'url'
-ORDER BY
-    base_latency_score_p95 DESC
+    crn->>'node_id'
