@@ -12,9 +12,15 @@ from cachetools import TTLCache, cached
 from packaging import version as semver
 from pydantic import BaseModel
 
-from .config import settings
-from .schemas.metrics import AlephNodeMetrics, CcnMetrics, CrnMetrics, NodeMetrics
-from .schemas.scoring import CcnScore, CrnScore, NodeScores
+from aleph_scoring.config import settings
+from aleph_scoring.metrics.models import (
+    AlephNodeMetrics,
+    CcnMetrics,
+    CrnMetrics,
+    NodeMetrics,
+)
+
+from .models import CcnScore, CrnScore, NodeScores, NodeScoresPost
 
 LOGGER = logging.getLogger(__name__)
 
