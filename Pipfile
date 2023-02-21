@@ -18,6 +18,7 @@ bokeh = "3.0.3"
 holoviews = "1.15.4"
 matplotlib = "3.7.0"
 cachetools = "5.3.0"
+asyncpg = "==0.27.0"
 
 [dev-packages]
 black = "23.1.0"
