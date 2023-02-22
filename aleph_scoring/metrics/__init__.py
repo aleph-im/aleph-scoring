@@ -154,13 +154,14 @@ async def get_crn_version(
             async with session.get(node_url) as resp:
                 resp.raise_for_status()
                 print(resp.headers)
+                if "Server" not in resp.headers:
+                    return None
                 for server in resp.headers.getall("Server"):
                     print("VERSION", [node_url, server])
                     version: List[str] = re.findall(r"^aleph-vm/(.*)$", server)
                     if version and version[0]:
                         return version[0]
-                else:
-                    return None
+
     except (aiohttp.ClientResponseError, aiohttp.ClientConnectorError):
         LOGGER.debug(f"Error when fetching version from {node_url}")
         return None
