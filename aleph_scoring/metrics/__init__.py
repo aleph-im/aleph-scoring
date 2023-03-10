@@ -24,14 +24,15 @@ from urllib.parse import urlparse
 import aiohttp
 import async_timeout
 import pyasn
+from aleph.sdk import AlephClient
 from pydantic import BaseModel, validator
 from urllib3.util import Url, parse_url
 
 from aleph_scoring.config import settings
 from aleph_scoring.metrics.asn import get_asn_database
 
+from ..utils import get_github_release
 from .models import AlephNodeMetrics, CcnMetrics, CrnMetrics, NodeMetrics
-from ..utils import get_latest_github_release, get_github_release
 
 LOGGER = logging.getLogger(__name__)
 
@@ -198,13 +199,17 @@ def lookup_asn(
 
 
 def compute_ccn_version_days_outdated(version):
-    latest_release = get_github_release(owner="aleph-im", repository="pyaleph", release=f"tags/{version}")
+    latest_release = get_github_release(
+        owner="aleph-im", repository="pyaleph", release=f"tags/{version}"
+    )
     # TODO
     return
 
 
 def compute_crn_version_days_outdated(version):
-    latest_release = get_github_release(owner="aleph-im", repository="aleph-vm", release=f"tags/{version}")
+    latest_release = get_github_release(
+        owner="aleph-im", repository="aleph-vm", release=f"tags/{version}"
+    )
     # TODO
     pass
 
@@ -371,12 +376,12 @@ async def collect_all_crn_metrics(node_data: Dict[str, Any]) -> Sequence[CrnMetr
 
 
 async def get_aleph_nodes() -> Dict:
-    url = settings.node_data_url
-    timeout = aiohttp.ClientTimeout(total=10.0)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        resp = await session.get(url)
-        resp.raise_for_status()
-        return await resp.json()
+    async with AlephClient(api_server=settings.NODE_DATA_HOST) as client:
+        return await client.fetch_aggregate(
+            address=settings.NODE_DATA_ADDR,
+            key="corechannel",
+            limit=50,
+        )
 
 
 async def collect_server_metadata(asn_db: pyasn.pyasn) -> Tuple[str, int, str]:

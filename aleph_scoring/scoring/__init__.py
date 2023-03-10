@@ -17,8 +17,8 @@ from aleph_scoring.metrics.models import (
     NodeMetrics,
 )
 
-from .models import CcnScore, CrnScore, NodeScores, NodeScoresPost
 from ..utils import GithubRelease, get_latest_github_release
+from .models import CcnScore, CrnScore, NodeScores, NodeScoresPost
 
 LOGGER = logging.getLogger(__name__)
 
@@ -72,7 +72,7 @@ def compute_version_score(
     if latest_version <= version:
         return 1.0
 
-    grace_period = settings.VERSION_SCORING_GRACE_PERIOD_DAYS
+    grace_period = settings.VERSION_GRACE_PERIOD
     grace_period_end = latest_release.published_at + dt.timedelta(grace_period)
     current_date = pytz.utc.localize(dt.datetime.utcnow())
 

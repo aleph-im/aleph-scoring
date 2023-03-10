@@ -1,7 +1,6 @@
 import asyncio.exceptions
 import logging
 import os
-import sys
 import time
 from enum import Enum
 from pathlib import Path
@@ -12,8 +11,7 @@ import schedule
 import sentry_sdk
 import typer
 from aleph.sdk.chains.ethereum import ETHAccount
-from aleph.sdk.client import AuthenticatedAlephClient, AlephClient
-from aleph_message.models import PostMessage, MessageType
+from aleph.sdk.client import AuthenticatedAlephClient
 from click import BadParameter
 from hexbytes import HexBytes
 
@@ -23,7 +21,6 @@ from aleph_scoring.metrics.models import MetricsPost, NodeMetrics
 from aleph_scoring.scoring import NodeScores, NodeScoresPost
 
 app = typer.Typer()
-
 
 logger = logging.getLogger(__name__)
 aleph_account: Optional[ETHAccount] = None
@@ -86,7 +83,9 @@ async def publish_metrics_on_aleph(node_metrics: NodeMetrics):
     aleph_api_server = settings.NODE_DATA_HOST
 
     metrics_post_data = MetricsPost(tags=["mainnet"], metrics=node_metrics)
-    async with AuthenticatedAlephClient(account=get_aleph_account(), api_server=aleph_api_server) as client:
+    async with AuthenticatedAlephClient(
+        account=get_aleph_account(), api_server=aleph_api_server
+    ) as client:
         metrics_post, _ = await client.create_post(
             post_content=metrics_post_data,
             post_type=settings.ALEPH_POST_TYPE_METRICS,
@@ -102,10 +101,12 @@ async def publish_scores_on_aleph(node_scores: NodeScores):
     scores_post_data = NodeScoresPost(
         tags=["mainnet"],
         # metrics_post=metrics_post.item_hash,
-        scores=node_scores
+        scores=node_scores,
     )
 
-    async with AuthenticatedAlephClient(account=get_aleph_account(), api_server=aleph_api_server) as client:
+    async with AuthenticatedAlephClient(
+        account=get_aleph_account(), api_server=aleph_api_server
+    ) as client:
         scores_post, _ = await client.create_post(
             post_content=scores_post_data,
             post_type=settings.ALEPH_POST_TYPE_SCORES,
@@ -114,7 +115,9 @@ async def publish_scores_on_aleph(node_scores: NodeScores):
     logger.debug("Published scores on Aleph: %s", scores_post.item_hash)
 
 
-def run_measurements(format: OutputFormat, output_file: Optional[Path], post_on_aleph: bool):
+def run_measurements(
+    format: OutputFormat, output_file: Optional[Path], post_on_aleph: bool
+):
     if post_on_aleph and format != OutputFormat.JSON:
         raise BadParameter("Output format must be JSON to post on Aleph.")
 
@@ -126,9 +129,7 @@ def run_measurements(format: OutputFormat, output_file: Optional[Path], post_on_
         print(node_metrics.json())
 
     if post_on_aleph:
-        asyncio.run(
-            publish_metrics_on_aleph(node_metrics=node_metrics)
-        )
+        asyncio.run(publish_metrics_on_aleph(node_metrics=node_metrics))
 
 
 @app.command()
@@ -140,7 +141,9 @@ def measure_once(
         help="Whether to save the results on Aleph. Only usable in combination with --format json.",
     ),
 ):
-    run_measurements(format=format, output_file=output_file, post_on_aleph=post_on_aleph)
+    run_measurements(
+        format=format, output_file=output_file, post_on_aleph=post_on_aleph
+    )
 
 
 @app.command()
@@ -185,7 +188,9 @@ def measure_on_schedule(
         help="Whether to save the results on Aleph. Only usable in combination with --format json.",
     ),
 ):
-    run_measurements(format=format, output_file=output_file, post_on_aleph=post_on_aleph)
+    run_measurements(
+        format=format, output_file=output_file, post_on_aleph=post_on_aleph
+    )
     schedule.every(settings.DAEMON_MODE_PERIOD_HOURS).hours.at(":00").do(
         run_measurements,
         format=format,

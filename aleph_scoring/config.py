@@ -1,13 +1,21 @@
 import logging
+from datetime import timedelta
 from typing import Optional
 
-from pydantic import BaseSettings
+from pydantic import BaseSettings, HttpUrl
 
 
 class Settings(BaseSettings):
     NODE_DATA_HOST: str = "https://official.aleph.cloud"
     NODE_DATA_ADDR: str = "0xa1B3bb7d2332383D96b7796B908fB7f7F3c2Be10"
-    NODE_DATA_TEMPLATE: str = "{}/api/v0/aggregates/{}.json?keys=corechannel&limit=50"
+
+    ALLOWED_METRICS_SENDER = "0x4d741d44348B21e97000A8C9f07Ee34110F7916F"
+
+    DATABASE_USER = "aleph"
+    DATABASE_PASSWORD = "569b8f23-0de6-4927-a15d-7157d8583e43"
+    DATABASE_DATABASE = "aleph"
+    DATABASE_HOST = "127.0.0.1"
+    DATABASE_PORT = 5432
 
     ALEPH_POST_TYPE_CHANNEL: Optional[str] = "aleph-scoring"
     ALEPH_POST_TYPE_METRICS: str = "test-aleph-scoring-metrics"
@@ -20,12 +28,10 @@ class Settings(BaseSettings):
     )
     HTTP_REQUEST_TIMEOUT: float = 10.0
     LOGGING_LEVEL: int = logging.DEBUG
-    SENTRY_DSN: Optional[str] = None
-    VERSION_SCORING_GRACE_PERIOD_DAYS: int = 14
+    SENTRY_DSN: Optional[HttpUrl] = None
 
-    @property
-    def node_data_url(self):
-        return self.NODE_DATA_TEMPLATE.format(self.NODE_DATA_HOST, self.NODE_DATA_ADDR)
+    VERSION_GRACE_PERIOD: timedelta = timedelta(weeks=2)
+    SCORE_METRICS_PERIOD: timedelta = timedelta(weeks=4)
 
     class Config:
         env_file = ".env"
