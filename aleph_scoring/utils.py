@@ -1,4 +1,6 @@
+import logging
 from datetime import datetime
+from enum import Enum
 from functools import partial
 from typing import NamedTuple, Optional, Tuple
 
@@ -10,6 +12,17 @@ from pydantic import BaseModel
 from .config import Settings
 
 Period = NamedTuple("Period", [("from_date", datetime), ("to_date", datetime)])
+
+
+class LogLevel(int, Enum):
+    CRITICAL = 50
+    FATAL = CRITICAL
+    ERROR = 40
+    WARNING = 30
+    WARN = WARNING
+    INFO = 20
+    DEBUG = 10
+    NOTSET = 0
 
 
 class GithubRelease(BaseModel):

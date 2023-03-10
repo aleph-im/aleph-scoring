@@ -2,69 +2,33 @@ import asyncio.exceptions
 import logging
 import os
 import time
-from enum import Enum
+from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Optional
 
-import pandas as pd
 import schedule
 import sentry_sdk
 import typer
 from aleph.sdk.chains.ethereum import ETHAccount
 from aleph.sdk.client import AuthenticatedAlephClient
-from click import BadParameter
 from hexbytes import HexBytes
 
 from aleph_scoring.config import settings
-from aleph_scoring.metrics import MetricsLogKey, measure_node_performance_sync
+from aleph_scoring.metrics import measure_node_performance_sync
 from aleph_scoring.metrics.models import MetricsPost, NodeMetrics
-from aleph_scoring.scoring import NodeScores, NodeScoresPost
-
-app = typer.Typer()
+from aleph_scoring.scoring import compute_ccn_scores, compute_crn_scores
+from aleph_scoring.scoring.models import NodeScores, NodeScoresPost
+from aleph_scoring.utils import LogLevel, Period, get_latest_github_releases
 
 logger = logging.getLogger(__name__)
 aleph_account: Optional[ETHAccount] = None
 
-
-class OutputFormat(str, Enum):
-    JSON = "json"
-    HDF5 = "hdf5"
+app = typer.Typer()
 
 
 def save_as_json(node_metrics: NodeMetrics, file: Path):
     with file.open(mode="w") as f:
         f.write(node_metrics.json(indent=4))
-
-
-def append_metrics_to_file(
-    filepath: Path, new_metrics: Dict[MetricsLogKey, pd.DataFrame]
-):
-    with pd.HDFStore(filepath.as_posix(), mode="a") as store:
-        for key, value in new_metrics.items():
-            store.put(key, value, format="table", append=True, track_times=False)
-        logger.debug(f"Metrics stored in file '{filepath}'")
-
-
-def save_as_hdf5(node_metrics: NodeMetrics, file: Path):
-    new_metrics: Dict[MetricsLogKey, pd.DataFrame] = {
-        "core_channel_nodes": pd.DataFrame(
-            [metrics.dict() for metrics in node_metrics.ccn]
-        ),
-        "compute_resource_nodes": pd.DataFrame(
-            metrics.dict() for metrics in node_metrics.crn
-        ),
-    }
-    if save_to_file:
-        append_metrics_to_file(filepath=file, new_metrics=new_metrics)
-
-
-def save_to_file(node_metrics: NodeMetrics, file: Path, format: OutputFormat):
-    if format == OutputFormat.JSON:
-        save_as_json(node_metrics, file)
-    elif format == OutputFormat.HDF5:
-        save_as_hdf5(node_metrics, file)
-    else:
-        raise NotImplementedError(f"Unsupported output format: {format}")
 
 
 def get_aleph_account():
@@ -84,14 +48,16 @@ async def publish_metrics_on_aleph(node_metrics: NodeMetrics):
 
     metrics_post_data = MetricsPost(tags=["mainnet"], metrics=node_metrics)
     async with AuthenticatedAlephClient(
-        account=get_aleph_account(), api_server=aleph_api_server
+            account=get_aleph_account(), api_server=aleph_api_server
     ) as client:
-        metrics_post, _ = await client.create_post(
+        metrics_post, status = await client.create_post(
             post_content=metrics_post_data,
             post_type=settings.ALEPH_POST_TYPE_METRICS,
             channel=channel,
         )
-    logger.debug("Published metrics on Aleph: %s", metrics_post.item_hash)
+    logger.debug(
+        "Published metrics on Aleph with status %s: %s", status, metrics_post.item_hash
+    )
 
 
 async def publish_scores_on_aleph(node_scores: NodeScores):
@@ -105,65 +71,110 @@ async def publish_scores_on_aleph(node_scores: NodeScores):
     )
 
     async with AuthenticatedAlephClient(
-        account=get_aleph_account(), api_server=aleph_api_server
+            account=get_aleph_account(), api_server=aleph_api_server
     ) as client:
-        scores_post, _ = await client.create_post(
+        scores_post, status = await client.create_post(
             post_content=scores_post_data,
             post_type=settings.ALEPH_POST_TYPE_SCORES,
             channel=channel,
         )
-    logger.debug("Published scores on Aleph: %s", scores_post.item_hash)
+    logger.debug(
+        "Published scores on Aleph with status %s: %s", status, scores_post.item_hash
+    )
 
 
 def run_measurements(
-    format: OutputFormat, output_file: Optional[Path], post_on_aleph: bool
+        output: Optional[Path] = typer.Option(
+            default=None, help="Path where to save the result in JSON format."
+        ),
+        publish: bool = typer.Option(
+            default=False,
+            help="Publish the results on Aleph.",
+        ),
 ):
-    if post_on_aleph and format != OutputFormat.JSON:
-        raise BadParameter("Output format must be JSON to post on Aleph.")
-
     node_metrics = measure_node_performance_sync()
 
-    if output_file:
-        save_to_file(node_metrics=node_metrics, file=output_file, format=format)
-    elif format == OutputFormat.JSON:
+    if output:
+        save_as_json(node_metrics=node_metrics, file=output)
+    else:
         print(node_metrics.json())
 
-    if post_on_aleph:
+    if publish:
         asyncio.run(publish_metrics_on_aleph(node_metrics=node_metrics))
 
 
 @app.command()
-def measure_once(
-    format: OutputFormat = typer.Option(..., help="Output format."),
-    output_file: Optional[Path] = typer.Option(None, help="Output file."),
-    post_on_aleph: bool = typer.Option(
-        False,
-        help="Whether to save the results on Aleph. Only usable in combination with --format json.",
-    ),
+def measure(
+        output: Optional[Path] = typer.Option(
+            default=None, help="Path where to save the result in JSON format."
+        ),
+        publish: bool = typer.Option(
+            default=False,
+            help="Publish the results on Aleph.",
+        ),
+        log: LogLevel = typer.Option(
+            default=LogLevel.INFO,
+            help="Logging level",
+        ),
 ):
-    run_measurements(
-        format=format, output_file=output_file, post_on_aleph=post_on_aleph
+    logging.basicConfig(level=log)
+    run_measurements(output=output, publish=publish)
+
+
+@app.command()
+def measure_on_schedule(
+        output: Optional[Path] = typer.Option(
+            default=None, help="Path where to save the result in JSON format."
+        ),
+        publish: bool = typer.Option(
+            default=False,
+            help="Publish the results on Aleph.",
+        ),
+        log: LogLevel = typer.Option(
+            default=LogLevel.INFO,
+            help="Logging level",
+        ),
+):
+    logging.basicConfig(level=log)
+    compute_scores(output=output, publish=publish, log=log)
+
+    schedule.every(settings.DAEMON_MODE_PERIOD_HOURS).hours.at(":00").do(
+        compute_scores,
+        save=output,
+        publish=publish,
+        log=log,
     )
+
+    logger.debug("Running the scheduler")
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
 
 
 @app.command()
 def measure_n_times(
-    n: int = 2,
-    format: OutputFormat = typer.Option(..., help="Output format."),
-    output_file: Optional[Path] = typer.Option(None, help="Output file."),
-    post_on_aleph: bool = typer.Option(
-        False,
-        help="Whether to save the results on Aleph. Only usable in combination with --format json.",
-    ),
+        n: int = 2,
+        output: Optional[Path] = typer.Option(
+            default=None, help="Path where to save the result in JSON format."
+        ),
+        publish: bool = typer.Option(
+            default=False,
+            help="Publish the results on Aleph.",
+        ),
+        log: LogLevel = typer.Option(
+            default=LogLevel.INFO,
+            help="Logging level",
+        ),
 ):
     """Measure the performance n times."""
+
+    logging.basicConfig(level=log)
+
     for i in range(n):
         t0 = time.time()
 
         try:
-            run_measurements(
-                format=format, output_file=output_file, post_on_aleph=post_on_aleph
-            )
+            run_measurements(output=output, publish=publish)
 
             duration = time.time() - t0
             delay = max(60 - duration, 0)
@@ -180,22 +191,82 @@ def measure_n_times(
 
 
 @app.command()
-def measure_on_schedule(
-    format: OutputFormat = typer.Option(..., help="Output format."),
-    output_file: Optional[Path] = typer.Option(None, help="Output file."),
-    post_on_aleph: bool = typer.Option(
-        False,
-        help="Whether to save the results on Aleph. Only usable in combination with --format json.",
-    ),
+def compute_scores(
+        output: Optional[Path] = typer.Option(
+            default=None, help="Path where to save the result in JSON format."
+        ),
+        publish: bool = typer.Option(
+            default=False,
+            help="Publish the results on Aleph.",
+        ),
+        log: LogLevel = typer.Option(
+            default=LogLevel.INFO,
+            help="Logging level",
+        ),
 ):
-    run_measurements(
-        format=format, output_file=output_file, post_on_aleph=post_on_aleph
+    logging.basicConfig(level=log)
+
+    to_date = datetime.utcnow()
+    from_date = to_date - settings.SCORE_METRICS_PERIOD
+    current_period = Period(from_date, to_date)
+
+    latest_ccn_release, previous_ccn_release = get_latest_github_releases(
+        "aleph-im", "pyaleph"
     )
+    latest_crn_release, previous_crn_release = get_latest_github_releases(
+        "aleph-im", "aleph-vm"
+    )
+
+    ccn_scores = asyncio.run(
+        compute_ccn_scores(
+            period=current_period,
+            last_release=latest_ccn_release,
+            previous_release=previous_ccn_release,
+        )
+    )
+    crn_scores = asyncio.run(
+        compute_crn_scores(
+            period=current_period,
+            last_release=latest_crn_release,
+            previous_release=previous_crn_release,
+        )
+    )
+
+    scores = NodeScores(
+        ccn=ccn_scores,
+        crn=crn_scores,
+    )
+
+    if output:
+        with open(output, "w") as fd:
+            fd.write(scores.json(indent=4))
+
+    if publish:
+        asyncio.run(publish_scores_on_aleph(scores))
+
+
+@app.command()
+def compute_on_schedule(
+        output: Optional[Path] = typer.Option(
+            default=None, help="Path where to save the result in JSON format."
+        ),
+        publish: bool = typer.Option(
+            default=False,
+            help="Publish the results on Aleph.",
+        ),
+        log: LogLevel = typer.Option(
+            default=LogLevel.INFO,
+            help="Logging level",
+        ),
+):
+    logging.basicConfig(level=log)
+    compute_scores(output=output, publish=publish, log=log)
+
     schedule.every(settings.DAEMON_MODE_PERIOD_HOURS).hours.at(":00").do(
-        run_measurements,
-        format=format,
-        output_file=output_file,
-        post_on_aleph=post_on_aleph,
+        compute_scores,
+        save=output,
+        publish=publish,
+        log=log,
     )
 
     logger.debug("Running the scheduler")
@@ -205,26 +276,11 @@ def measure_on_schedule(
 
 
 @app.command()
-def compute_scores_once(
-    format: OutputFormat = typer.Option(..., help="Output format."),
-    output_file: Optional[Path] = typer.Option(None, help="Output file."),
-    post_on_aleph: bool = typer.Option(
-        False,
-        help="Whether to save the results on Aleph. Only usable in combination with --format json.",
-    ),
-):
-    node_scores: NodeScores = ...
-    if post_on_aleph:
-        publish_scores_on_aleph(node_scores)
-
-
-@app.command()
 def export_as_html(input_file: Optional[Path]):
     os.system("jupyter nbconvert --execute Node\\ Score\\ Analysis.ipynb --to html")
 
 
 def main():
-    logging.basicConfig(level=settings.LOGGING_LEVEL)
     if settings.SENTRY_DSN:
         sentry_sdk.init(
             settings.SENTRY_DSN,

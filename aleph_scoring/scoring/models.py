@@ -1,9 +1,12 @@
 from typing import List
 
 from aleph_message.models import ItemHash
-from pydantic import BaseModel, confloat
+from pydantic import BaseModel, ConstrainedFloat, confloat
 
-Score = confloat(ge=0, le=1)
+
+class Score(ConstrainedFloat):
+    min = 0
+    max = 1
 
 
 class BaseNodeMeasurements(BaseModel):
