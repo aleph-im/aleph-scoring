@@ -1,9 +1,13 @@
 from typing import List
 
-from aleph_message.models import ItemHash
-from pydantic import BaseModel, confloat
+from pydantic import BaseModel, ConstrainedFloat
 
-Score = confloat(ge=0, le=1)
+from aleph_scoring.utils import Period
+
+
+class Score(ConstrainedFloat):
+    min = 0
+    max = 1
 
 
 class BaseNodeMeasurements(BaseModel):
@@ -61,7 +65,7 @@ class NodeScores(BaseModel):
 
 
 class NodeScoresPost(BaseModel):
-    version: str = "1.0"
+    version: str = "1.1"
     tags: List[str]
-    metrics_post: ItemHash
+    period: Period
     scores: NodeScores
