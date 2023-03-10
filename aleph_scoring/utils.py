@@ -1,4 +1,3 @@
-import logging
 from datetime import datetime
 from enum import Enum
 from functools import partial
