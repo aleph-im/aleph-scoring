@@ -7,10 +7,7 @@ from typing import Collection, Dict, List, Optional
 
 import pandas as pd
 import pytz
-import requests
-from cachetools import TTLCache, cached
 from packaging import version as semver
-from pydantic import BaseModel
 
 from aleph_scoring.config import settings
 from aleph_scoring.metrics.models import (
@@ -21,25 +18,9 @@ from aleph_scoring.metrics.models import (
 )
 
 from .models import CcnScore, CrnScore, NodeScores, NodeScoresPost
+from ..utils import GithubRelease, get_latest_github_release
 
 LOGGER = logging.getLogger(__name__)
-
-
-class GithubRelease(BaseModel):
-    tag_name: str
-    name: str
-    created_at: dt.datetime
-    published_at: dt.datetime
-
-
-# Cache requests to GitHub to avoid reaching rate limiting.
-@cached(cache=TTLCache(maxsize=1, ttl=600))
-def get_latest_github_release(owner: str, repository: str) -> GithubRelease:
-    uri = f"https://api.github.com/repos/{owner}/{repository}/releases/latest"
-    response = requests.get(uri)
-    response.raise_for_status()
-
-    return GithubRelease.parse_raw(response.text)
 
 
 def score_latency(value: Optional[float]) -> float:
