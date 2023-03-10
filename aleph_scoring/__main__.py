@@ -48,7 +48,7 @@ async def publish_metrics_on_aleph(node_metrics: NodeMetrics):
 
     metrics_post_data = MetricsPost(tags=["mainnet"], metrics=node_metrics)
     async with AuthenticatedAlephClient(
-            account=get_aleph_account(), api_server=aleph_api_server
+        account=get_aleph_account(), api_server=aleph_api_server
     ) as client:
         metrics_post, status = await client.create_post(
             post_content=metrics_post_data,
@@ -71,7 +71,7 @@ async def publish_scores_on_aleph(node_scores: NodeScores):
     )
 
     async with AuthenticatedAlephClient(
-            account=get_aleph_account(), api_server=aleph_api_server
+        account=get_aleph_account(), api_server=aleph_api_server
     ) as client:
         scores_post, status = await client.create_post(
             post_content=scores_post_data,
@@ -84,13 +84,13 @@ async def publish_scores_on_aleph(node_scores: NodeScores):
 
 
 def run_measurements(
-        output: Optional[Path] = typer.Option(
-            default=None, help="Path where to save the result in JSON format."
-        ),
-        publish: bool = typer.Option(
-            default=False,
-            help="Publish the results on Aleph.",
-        ),
+    output: Optional[Path] = typer.Option(
+        default=None, help="Path where to save the result in JSON format."
+    ),
+    publish: bool = typer.Option(
+        default=False,
+        help="Publish the results on Aleph.",
+    ),
 ):
     node_metrics = measure_node_performance_sync()
 
@@ -105,17 +105,17 @@ def run_measurements(
 
 @app.command()
 def measure(
-        output: Optional[Path] = typer.Option(
-            default=None, help="Path where to save the result in JSON format."
-        ),
-        publish: bool = typer.Option(
-            default=False,
-            help="Publish the results on Aleph.",
-        ),
-        log: LogLevel = typer.Option(
-            default=LogLevel.INFO,
-            help="Logging level",
-        ),
+    output: Optional[Path] = typer.Option(
+        default=None, help="Path where to save the result in JSON format."
+    ),
+    publish: bool = typer.Option(
+        default=False,
+        help="Publish the results on Aleph.",
+    ),
+    log: LogLevel = typer.Option(
+        default=LogLevel.INFO,
+        help="Logging level",
+    ),
 ):
     logging.basicConfig(level=log)
     run_measurements(output=output, publish=publish)
@@ -123,17 +123,17 @@ def measure(
 
 @app.command()
 def measure_on_schedule(
-        output: Optional[Path] = typer.Option(
-            default=None, help="Path where to save the result in JSON format."
-        ),
-        publish: bool = typer.Option(
-            default=False,
-            help="Publish the results on Aleph.",
-        ),
-        log: LogLevel = typer.Option(
-            default=LogLevel.INFO,
-            help="Logging level",
-        ),
+    output: Optional[Path] = typer.Option(
+        default=None, help="Path where to save the result in JSON format."
+    ),
+    publish: bool = typer.Option(
+        default=False,
+        help="Publish the results on Aleph.",
+    ),
+    log: LogLevel = typer.Option(
+        default=LogLevel.INFO,
+        help="Logging level",
+    ),
 ):
     logging.basicConfig(level=log)
     compute_scores(output=output, publish=publish, log=log)
@@ -153,18 +153,18 @@ def measure_on_schedule(
 
 @app.command()
 def measure_n_times(
-        n: int = 2,
-        output: Optional[Path] = typer.Option(
-            default=None, help="Path where to save the result in JSON format."
-        ),
-        publish: bool = typer.Option(
-            default=False,
-            help="Publish the results on Aleph.",
-        ),
-        log: LogLevel = typer.Option(
-            default=LogLevel.INFO,
-            help="Logging level",
-        ),
+    n: int = 2,
+    output: Optional[Path] = typer.Option(
+        default=None, help="Path where to save the result in JSON format."
+    ),
+    publish: bool = typer.Option(
+        default=False,
+        help="Publish the results on Aleph.",
+    ),
+    log: LogLevel = typer.Option(
+        default=LogLevel.INFO,
+        help="Logging level",
+    ),
 ):
     """Measure the performance n times."""
 
@@ -192,17 +192,17 @@ def measure_n_times(
 
 @app.command()
 def compute_scores(
-        output: Optional[Path] = typer.Option(
-            default=None, help="Path where to save the result in JSON format."
-        ),
-        publish: bool = typer.Option(
-            default=False,
-            help="Publish the results on Aleph.",
-        ),
-        log: LogLevel = typer.Option(
-            default=LogLevel.INFO,
-            help="Logging level",
-        ),
+    output: Optional[Path] = typer.Option(
+        default=None, help="Path where to save the result in JSON format."
+    ),
+    publish: bool = typer.Option(
+        default=False,
+        help="Publish the results on Aleph.",
+    ),
+    log: LogLevel = typer.Option(
+        default=LogLevel.INFO,
+        help="Logging level",
+    ),
 ):
     logging.basicConfig(level=log)
 
@@ -247,17 +247,17 @@ def compute_scores(
 
 @app.command()
 def compute_on_schedule(
-        output: Optional[Path] = typer.Option(
-            default=None, help="Path where to save the result in JSON format."
-        ),
-        publish: bool = typer.Option(
-            default=False,
-            help="Publish the results on Aleph.",
-        ),
-        log: LogLevel = typer.Option(
-            default=LogLevel.INFO,
-            help="Logging level",
-        ),
+    output: Optional[Path] = typer.Option(
+        default=None, help="Path where to save the result in JSON format."
+    ),
+    publish: bool = typer.Option(
+        default=False,
+        help="Publish the results on Aleph.",
+    ),
+    log: LogLevel = typer.Option(
+        default=LogLevel.INFO,
+        help="Logging level",
+    ),
 ):
     logging.basicConfig(level=log)
     compute_scores(output=output, publish=publish, log=log)
