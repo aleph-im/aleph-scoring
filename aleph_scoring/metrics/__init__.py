@@ -34,7 +34,7 @@ from aleph_scoring.metrics.asn import get_asn_database
 from ..utils import get_github_release
 from .models import AlephNodeMetrics, CcnMetrics, CrnMetrics, NodeMetrics
 
-LOGGER = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 # Global variable used to aggregate the metrics over time
 MetricsLogKey = Literal["core_channel_nodes", "compute_resource_nodes"]
@@ -73,7 +73,7 @@ class NodeInfo(BaseModel):
 
 def get_api_node_urls(raw_data: Dict[str, Any]) -> Generator[NodeInfo, None, None]:
     """Extract CCN urls from node data."""
-    for node in raw_data["data"]["corechannel"]["nodes"]:
+    for node in raw_data["nodes"]:
         multiaddress = node["multiaddress"]
         match = re.findall(r"/ip4/([\d\\.]+)/.*", multiaddress)
         if match:
@@ -88,14 +88,14 @@ def get_compute_resource_node_urls(
     raw_data: Dict[str, Any]
 ) -> Generator[NodeInfo, None, None]:
     """Extract CRN node urls the node data."""
-    for node in raw_data["data"]["corechannel"]["resource_nodes"]:
+    for node in raw_data["resource_nodes"]:
         addr = node["address"].strip("/")
         if addr:
             if not addr.startswith("https://"):
                 addr = "https://" + addr
             url: Url = parse_url(addr + "/")
             if url.query:
-                LOGGER.warning("Unsupported url for node %s", node["hash"])
+                logger.warning("Unsupported url for node %s", node["hash"])
             yield NodeInfo(
                 url=url,
                 hash=node["hash"],
@@ -127,21 +127,21 @@ async def measure_http_latency(
                     else:
                         output = await resp.text()
                     end = time.time()
-                    LOGGER.debug(f"Success when fetching {url}")
+                    logger.debug(f"Success when fetching {url}")
                     return end - start, output
                 else:
                     await resp.release()
                     end = time.time()
-                    LOGGER.debug(f"Success when fetching {url}")
+                    logger.debug(f"Success when fetching {url}")
                     return end - start, None
     except aiohttp.ClientResponseError:
-        LOGGER.debug(f"Error when fetching {url}")
+        logger.debug(f"Error when fetching {url}")
         return None, None
     except aiohttp.ClientConnectorError:
-        LOGGER.debug(f"Error when fetching {url}")
+        logger.debug(f"Error when fetching {url}")
         return None, None
     except asyncio.TimeoutError:
-        LOGGER.debug(f"Timeout error when fetching {url}")
+        logger.debug(f"Timeout error when fetching {url}")
         return None, None
 
 
@@ -165,10 +165,10 @@ async def get_crn_version(
                     return None
 
     except (aiohttp.ClientResponseError, aiohttp.ClientConnectorError):
-        LOGGER.debug(f"Error when fetching version from {node_url}")
+        logger.debug(f"Error when fetching version from {node_url}")
         return None
     except asyncio.TimeoutError:
-        LOGGER.debug(f"Timeout error when fetching version from  {node_url}")
+        logger.debug(f"Timeout error when fetching version from  {node_url}")
         return None
 
 
@@ -190,11 +190,11 @@ def lookup_asn(
 ) -> Union[Tuple[str, str], Tuple[None, None]]:
     ip_addr = get_ipv4(url)
     if ip_addr is None:
-        LOGGER.debug("Could not determine IP address for %s", url)
+        logger.debug("Could not determine IP address for %s", url)
         return None, None
     asn = asn_db.lookup(ip_addr)[0]
     if asn is None:
-        LOGGER.debug("ASN lookup for (%s) %s did not return a result", ip_addr, url)
+        logger.debug("ASN lookup for (%s) %s did not return a result", ip_addr, url)
         return None, None
 
     return asn, asn_db.get_as_name(asn)
@@ -416,11 +416,11 @@ async def collect_all_node_metrics() -> NodeMetrics:
 
     # Aleph node metrics
     aleph_nodes = await get_aleph_nodes()
-    LOGGER.debug("Fetched node data")
+    logger.debug("Fetched node data")
     ccn_metrics = await collect_all_ccn_metrics(aleph_nodes)
-    LOGGER.debug("Fetched CCN metrics")
+    logger.debug("Fetched CCN metrics")
     crn_metrics = await collect_all_crn_metrics(aleph_nodes)
-    LOGGER.debug("Fetched CRN metrics")
+    logger.debug("Fetched CRN metrics")
 
     return NodeMetrics(
         server=ip_address,
@@ -432,7 +432,7 @@ async def collect_all_node_metrics() -> NodeMetrics:
 
 
 async def measure_node_performance() -> NodeMetrics:
-    LOGGER.debug("Measuring node performance")
+    logger.debug("Measuring node performance")
     node_metrics = await collect_all_node_metrics()
     return node_metrics
 

@@ -55,7 +55,7 @@ async def publish_metrics_on_aleph(node_metrics: NodeMetrics):
             post_type=settings.ALEPH_POST_TYPE_METRICS,
             channel=channel,
         )
-    logger.debug(
+    logger.info(
         "Published metrics on Aleph with status %s: %s", status, metrics_post.item_hash
     )
 
@@ -87,6 +87,9 @@ def run_measurements(
     output: Optional[Path] = typer.Option(
         default=None, help="Path where to save the result in JSON format."
     ),
+    stdout: bool = typer.Option(
+        default=False, help="Print the result on stdout"
+    ),
     publish: bool = typer.Option(
         default=False,
         help="Publish the results on Aleph.",
@@ -96,9 +99,8 @@ def run_measurements(
 
     if output:
         save_as_json(node_metrics=node_metrics, file=output)
-    else:
-        print(node_metrics.json())
-
+    if stdout:
+        print(node_metrics.json(indent=4))
     if publish:
         asyncio.run(publish_metrics_on_aleph(node_metrics=node_metrics))
 
@@ -195,6 +197,9 @@ def compute_scores(
     output: Optional[Path] = typer.Option(
         default=None, help="Path where to save the result in JSON format."
     ),
+    stdout: bool = typer.Option(
+        default=False, help="Print the result on stdout"
+    ),
     publish: bool = typer.Option(
         default=False,
         help="Publish the results on Aleph.",
@@ -237,9 +242,13 @@ def compute_scores(
         crn=crn_scores,
     )
 
-    if output:
-        with open(output, "w") as fd:
-            fd.write(scores.json(indent=4))
+    if stdout or output:
+        result = scores.json(indent=4)
+        if stdout:
+            print(result)
+        if output:
+            with open(output, "w") as fd:
+                fd.write(result)
 
     if publish:
         asyncio.run(publish_scores_on_aleph(scores))

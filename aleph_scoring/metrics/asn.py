@@ -18,7 +18,8 @@ from aleph_scoring.config import settings
 
 Server = NewType("Server", str)
 
-LOGGER = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
+
 EXTRACT_ASNAME_C: Final = re.compile(
     r"<a .+>AS(?P<code>.+?)\s*</a>\s*(?P<name>.*)", re.U
 )
@@ -31,7 +32,7 @@ def ftp_download(server: Server, remote_dir: str, remote_file: str, local_file: 
     with FTP(server) as ftp:
         ftp.login()
         ftp.cwd(remote_dir)
-        LOGGER.debug("Downloading ftp://%s/%s/%s", server, remote_dir, remote_file)
+        logger.debug("Downloading ftp://%s/%s/%s", server, remote_dir, remote_file)
         filesize = ftp.size(remote_file)
         # perhaps warn before overwriting file?
         with local_file.open("wb") as fp:
@@ -41,7 +42,7 @@ def ftp_download(server: Server, remote_dir: str, remote_file: str, local_file: 
                 recv.chunk += 1
                 recv.bytes += len(s)
                 if recv.chunk % 100 == 0:
-                    LOGGER.debug(
+                    logger.debug(
                         "\r %.f%%, %.fKB/s",
                         recv.bytes * 100 / filesize,
                         recv.bytes / (1000 * (time() - recv.start)),
@@ -49,7 +50,7 @@ def ftp_download(server: Server, remote_dir: str, remote_file: str, local_file: 
 
             recv.chunk, recv.bytes, recv.start = 0, 0, time()
             ftp.retrbinary("RETR %s" % remote_file, recv)
-    LOGGER.debug("\nDownload complete.")
+    logger.debug("\nDownload complete.")
 
 
 # Imported from pyasn_util_download.py
@@ -57,19 +58,19 @@ def find_latest_in_ftp(
     server: Server, archive_root: str, sub_dir: str
 ) -> Tuple[Server, str, str]:
     """Returns (server, filepath, filename) for the most recent file in an FTP archive"""
-    LOGGER.debug("Connecting to ftp://%s", server)
+    logger.debug("Connecting to ftp://%s", server)
     ftp = FTP(server)
     ftp.login()
     months = sorted(
         ftp.nlst(archive_root), reverse=True
     )  # e.g. 'route-views6/bgpdata/2016.12'
     filepath = "/%s/%s" % (months[0], sub_dir)
-    LOGGER.debug("Finding most recent archive in %s ...", filepath)
+    logger.debug("Finding most recent archive in %s ...", filepath)
     ftp.cwd(filepath)
     fls = ftp.nlst()
     if not fls:
         filepath = "/%s/%s" % (months[1], sub_dir)
-        LOGGER.debug("Finding most recent archive in %s ...", filepath)
+        logger.debug("Finding most recent archive in %s ...", filepath)
         ftp.cwd(filepath)
         fls = ftp.nlst()
         if not fls:
@@ -155,14 +156,14 @@ def update_names_file(names_file: Path):
 
 def should_update_asn_db(asn_db_file: Path) -> bool:
     if not asn_db_file.exists():
-        LOGGER.debug("ASN DB file does not exist, downloading it.")
+        logger.debug("ASN DB file does not exist, downloading it.")
         return True
 
     last_update_time = dt.datetime.fromtimestamp(asn_db_file.stat().st_mtime)
     if dt.datetime.now() > last_update_time + dt.timedelta(
         days=settings.ASN_DB_REFRESH_PERIOD_DAYS
     ):
-        LOGGER.debug("ASN DB file is outdated, updating it.")
+        logger.debug("ASN DB file is outdated, updating it.")
         return True
 
     return False
