@@ -10,12 +10,21 @@ from aleph_scoring.scoring.models import CrnScore, CrnMeasurements, NodeScores, 
 ALLOWED_METRICS_SENDER = "0x4d741d44348B21e97000A8C9f07Ee34110F7916F"
 
 
+def read_sql_file(filename: str):
+    with open(Path(__file__).parent / "sql" / filename) as fd:
+        return fd.read()
+
+
 async def query_crn_asn_info(conn: asyncpg.connection) -> Dict[str, Dict]:
-    """ASN metrics is queried independently of the other metrics
+    """Query node autonomous system numbers (ASN).
+
+    ASN is used to compute how decentralized a node is relative to other nodes
+    in the network.
+
+    ASN metrics is queried independently of the other metrics
     as to avoid issues related to the group by node_id.
     """
-    with open(Path(__file__).parent / "sql/05.template.sql") as fd:
-        sql = fd.read()
+    sql = read_sql_file("query_node_asn_info.template.sql")
 
     allowed_sender = ALLOWED_METRICS_SENDER
     date_gt = datetime.fromisoformat("2022-12-01")
@@ -26,6 +35,7 @@ async def query_crn_asn_info(conn: asyncpg.connection) -> Dict[str, Dict]:
         allowed_sender,
         date_gt,
         date_lt,
+        'crn',
     )
 
     result = {}
@@ -45,8 +55,7 @@ async def query_crn_asn_info(conn: asyncpg.connection) -> Dict[str, Dict]:
 
 async def query_crn_measurements(conn: asyncpg.connection, asn_info: Dict,
                                  period: Tuple[datetime, datetime]):
-    with open(Path(__file__).parent / "sql/04.template.sql") as fd:
-        sql = fd.read()
+    sql = read_sql_file("query_crn_measurements.template.sql")
 
     select_last_version = "0.2.5"
     select_previous_version = "0.2.4"
@@ -146,8 +155,7 @@ async def query_ccn_asn_info(conn: asyncpg.connection,) -> Dict[str, Dict]:
     """ASN metrics is queried independently of the other metrics
     as to avoid issues related to the group by node_id.
     """
-    with open(Path(__file__).parent / "sql/05.template-ccn.sql") as fd:
-        sql = fd.read()
+    sql = read_sql_file("query_node_asn_info.template.sql")
 
     allowed_sender = ALLOWED_METRICS_SENDER
     date_gt = datetime.fromisoformat("2022-12-01")
@@ -158,6 +166,7 @@ async def query_ccn_asn_info(conn: asyncpg.connection,) -> Dict[str, Dict]:
         allowed_sender,
         date_gt,
         date_lt,
+        'ccn',
     )
 
     result = {}
@@ -177,8 +186,7 @@ async def query_ccn_asn_info(conn: asyncpg.connection,) -> Dict[str, Dict]:
 
 async def query_ccn_measurements(conn: asyncpg.connection, asn_info: Dict,
                                  period: Tuple[datetime, datetime]):
-    with open(Path(__file__).parent / "sql/06.template.sql") as fd:
-        sql = fd.read()
+    sql = read_sql_file("query_ccn_measurements.template.sql")
 
     select_last_version = "v0.4.4"
     select_previous_version = "v0.4.3"
