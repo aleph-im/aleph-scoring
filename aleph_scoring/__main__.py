@@ -1,4 +1,5 @@
 import asyncio.exceptions
+import json
 import logging
 import os
 import time
@@ -60,25 +61,29 @@ async def publish_metrics_on_aleph(node_metrics: NodeMetrics):
     )
 
 
-async def publish_scores_on_aleph(node_scores: NodeScores):
+async def publish_scores_on_aleph(node_scores: NodeScores, period: Period):
     channel = settings.ALEPH_POST_TYPE_CHANNEL
     aleph_api_server = settings.NODE_DATA_HOST
 
     scores_post_data = NodeScoresPost(
         tags=["mainnet"],
-        # metrics_post=metrics_post.item_hash,
         scores=node_scores,
+        period=period,
     )
+
+    post_content = scores_post_data.dict()
+    # Force datetime conversion to string
+    post_content["period"] = json.loads(period.json())
 
     async with AuthenticatedAlephClient(
         account=get_aleph_account(), api_server=aleph_api_server
     ) as client:
         scores_post, status = await client.create_post(
-            post_content=scores_post_data,
+            post_content=post_content,
             post_type=settings.ALEPH_POST_TYPE_SCORES,
             channel=channel,
         )
-    logger.debug(
+    logger.info(
         "Published scores on Aleph with status %s: %s", status, scores_post.item_hash
     )
 
@@ -87,9 +92,7 @@ def run_measurements(
     output: Optional[Path] = typer.Option(
         default=None, help="Path where to save the result in JSON format."
     ),
-    stdout: bool = typer.Option(
-        default=False, help="Print the result on stdout"
-    ),
+    stdout: bool = typer.Option(default=False, help="Print the result on stdout"),
     publish: bool = typer.Option(
         default=False,
         help="Publish the results on Aleph.",
@@ -197,9 +200,7 @@ def compute_scores(
     output: Optional[Path] = typer.Option(
         default=None, help="Path where to save the result in JSON format."
     ),
-    stdout: bool = typer.Option(
-        default=False, help="Print the result on stdout"
-    ),
+    stdout: bool = typer.Option(default=False, help="Print the result on stdout"),
     publish: bool = typer.Option(
         default=False,
         help="Publish the results on Aleph.",
@@ -213,7 +214,7 @@ def compute_scores(
 
     to_date = datetime.utcnow()
     from_date = to_date - settings.SCORE_METRICS_PERIOD
-    current_period = Period(from_date, to_date)
+    current_period = Period(from_date=from_date, to_date=to_date)
 
     latest_ccn_release, previous_ccn_release = get_latest_github_releases(
         "aleph-im", "pyaleph"
@@ -251,7 +252,7 @@ def compute_scores(
                 fd.write(result)
 
     if publish:
-        asyncio.run(publish_scores_on_aleph(scores))
+        asyncio.run(publish_scores_on_aleph(scores, current_period))
 
 
 @app.command()

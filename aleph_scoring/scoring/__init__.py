@@ -321,7 +321,7 @@ if __name__ == "__main__":
 
     to_date = datetime.utcnow()
     from_date = to_date - settings.SCORE_METRICS_PERIOD
-    current_period = Period(from_date, to_date)
+    current_period = Period(from_date=from_date, to_date=to_date)
 
     latest_ccn_release, previous_ccn_release = get_latest_github_releases(
         "aleph-im", "pyaleph"

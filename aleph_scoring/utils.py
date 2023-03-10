@@ -1,7 +1,7 @@
 from datetime import datetime
 from enum import Enum
 from functools import partial
-from typing import NamedTuple, Optional, Tuple
+from typing import Optional, Tuple
 
 import asyncpg
 import requests
@@ -10,7 +10,10 @@ from pydantic import BaseModel
 
 from .config import Settings
 
-Period = NamedTuple("Period", [("from_date", datetime), ("to_date", datetime)])
+
+class Period(BaseModel):
+    from_date: datetime
+    to_date: datetime
 
 
 class LogLevel(int, Enum):
