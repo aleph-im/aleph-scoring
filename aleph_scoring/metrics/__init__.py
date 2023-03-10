@@ -31,6 +31,7 @@ from aleph_scoring.config import settings
 from aleph_scoring.metrics.asn import get_asn_database
 
 from .models import AlephNodeMetrics, CcnMetrics, CrnMetrics, NodeMetrics
+from ..utils import get_latest_github_release, get_github_release
 
 LOGGER = logging.getLogger(__name__)
 
@@ -153,11 +154,9 @@ async def get_crn_version(
         ):
             async with session.get(node_url) as resp:
                 resp.raise_for_status()
-                print(resp.headers)
                 if "Server" not in resp.headers:
                     return None
                 for server in resp.headers.getall("Server"):
-                    print("VERSION", [node_url, server])
                     version: List[str] = re.findall(r"^aleph-vm/(.*)$", server)
                     if version and version[0]:
                         return version[0]
@@ -196,6 +195,18 @@ def lookup_asn(
         return None, None
 
     return asn, asn_db.get_as_name(asn)
+
+
+def compute_ccn_version_days_outdated(version):
+    latest_release = get_github_release(owner="aleph-im", repository="pyaleph", release=f"tags/{version}")
+    # TODO
+    return
+
+
+def compute_crn_version_days_outdated(version):
+    latest_release = get_github_release(owner="aleph-im", repository="aleph-vm", release=f"tags/{version}")
+    # TODO
+    pass
 
 
 class CcnBuildInfo(BaseModel):
@@ -256,9 +267,10 @@ async def get_ccn_metrics(
         )
 
         if json_text is not None:
-            json_object = CcnApiMetricsResponse(**json_text)
+            json_object = CcnApiMetricsResponse.parse_obj(json_text)
         else:
             json_object = CcnApiMetricsResponse()
+        version = json_object.version()
 
         return CcnMetrics(
             measured_at=measured_at.timestamp(),
@@ -266,7 +278,8 @@ async def get_ccn_metrics(
             url=url,
             asn=asn,
             as_name=as_name,
-            version=json_object.version(),
+            version=version,
+            # days_outdated=compute_ccn_version_days_outdated(version=version),
             base_latency=base_latency,
             metrics_latency=metrics_latency,
             aggregate_latency=aggregate_latency,
@@ -318,6 +331,7 @@ async def get_crn_metrics(
             asn=asn,
             as_name=as_name,
             version=version,
+            # days_outdated=compute_crn_version_days_outdated(version=version),
             base_latency=base_latency,
             diagnostic_vm_latency=diagnostic_vm_latency,
             full_check_latency=full_check_latency,

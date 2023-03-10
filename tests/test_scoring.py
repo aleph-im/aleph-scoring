@@ -4,11 +4,11 @@ import pytest
 
 from aleph_scoring.metrics import CcnMetrics, CrnMetrics
 from aleph_scoring.scoring import (
-    GithubRelease,
     compute_ccn_scores,
     compute_crn_scores,
     sanitize_semver,
 )
+from aleph_scoring.utils import GithubRelease
 
 
 @pytest.fixture

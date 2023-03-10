@@ -1,13 +1,13 @@
 import asyncio
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 import asyncpg
 
 from aleph_scoring.scoring.models import CrnScore, CrnMeasurements, NodeScores, CcnMeasurements, CcnScore
 
-METRICS_EMITTER = "0x4d741d44348B21e97000A8C9f07Ee34110F7916F"
+ALLOWED_METRICS_SENDER = "0x4d741d44348B21e97000A8C9f07Ee34110F7916F"
 
 
 async def query_crn_asn_info(conn: asyncpg.connection) -> Dict[str, Dict]:
@@ -17,7 +17,7 @@ async def query_crn_asn_info(conn: asyncpg.connection) -> Dict[str, Dict]:
     with open(Path(__file__).parent / "sql/05.template.sql") as fd:
         sql = fd.read()
 
-    allowed_sender = "0x4d741d44348B21e97000A8C9f07Ee34110F7916F"
+    allowed_sender = ALLOWED_METRICS_SENDER
     date_gt = datetime.fromisoformat("2022-12-01")
     date_lt = datetime.fromisoformat("2023-03-10")
 
@@ -43,7 +43,8 @@ async def query_crn_asn_info(conn: asyncpg.connection) -> Dict[str, Dict]:
     return result
 
 
-async def query_crn_measurements(conn: asyncpg.connection, asn_info: Dict):
+async def query_crn_measurements(conn: asyncpg.connection, asn_info: Dict,
+                                 period: Tuple[datetime, datetime]):
     with open(Path(__file__).parent / "sql/04.template.sql") as fd:
         sql = fd.read()
 
@@ -51,9 +52,9 @@ async def query_crn_measurements(conn: asyncpg.connection, asn_info: Dict):
     select_previous_version = "0.2.4"
     release_date = datetime.fromisoformat("2022-10-06")
     select_update_deadline = release_date + timedelta(weeks=2)
-    select_trusted_owner = "0x4d741d44348B21e97000A8C9f07Ee34110F7916F"
-    select_where_date_gt = datetime.fromisoformat("2022-12-01")
-    select_where_date_lt = datetime.fromisoformat("2023-03-10")
+    select_trusted_owner = ALLOWED_METRICS_SENDER
+    select_where_date_gt = period[0]  # datetime.fromisoformat("2022-12-01")
+    select_where_date_lt = period[1]  # datetime.fromisoformat("2023-03-10")
 
     values = await conn.fetch(
         sql,
@@ -72,7 +73,7 @@ async def query_crn_measurements(conn: asyncpg.connection, asn_info: Dict):
         yield record['node_id'], CrnMeasurements.parse_obj(row)
 
 
-async def compute_crn_scores() -> List[CrnScore]:
+async def compute_crn_scores(period: Tuple[datetime, datetime]) -> List[CrnScore]:
     conn = await asyncpg.connect(
         user="aleph",
         password="569b8f23-0de6-4927-a15d-7157d8583e43",
@@ -84,7 +85,7 @@ async def compute_crn_scores() -> List[CrnScore]:
     asn_info: Dict[str, Dict] = await query_crn_asn_info(conn)
 
     result = []
-    async for node_id, measurements in query_crn_measurements(conn, asn_info):
+    async for node_id, measurements in query_crn_measurements(conn, asn_info, period):
 
         # This contains custom logic on the scores
         performance_score = (
@@ -141,14 +142,14 @@ async def compute_crn_scores() -> List[CrnScore]:
     return result
 
 
-async def query_ccn_asn_info(conn: asyncpg.connection) -> Dict[str, Dict]:
+async def query_ccn_asn_info(conn: asyncpg.connection,) -> Dict[str, Dict]:
     """ASN metrics is queried independently of the other metrics
     as to avoid issues related to the group by node_id.
     """
     with open(Path(__file__).parent / "sql/05.template-ccn.sql") as fd:
         sql = fd.read()
 
-    allowed_sender = "0x4d741d44348B21e97000A8C9f07Ee34110F7916F"
+    allowed_sender = ALLOWED_METRICS_SENDER
     date_gt = datetime.fromisoformat("2022-12-01")
     date_lt = datetime.fromisoformat("2023-03-10")
 
@@ -174,7 +175,8 @@ async def query_ccn_asn_info(conn: asyncpg.connection) -> Dict[str, Dict]:
     return result
 
 
-async def query_ccn_measurements(conn: asyncpg.connection, asn_info: Dict):
+async def query_ccn_measurements(conn: asyncpg.connection, asn_info: Dict,
+                                 period: Tuple[datetime, datetime]):
     with open(Path(__file__).parent / "sql/06.template.sql") as fd:
         sql = fd.read()
 
@@ -182,9 +184,9 @@ async def query_ccn_measurements(conn: asyncpg.connection, asn_info: Dict):
     select_previous_version = "v0.4.3"
     release_date = datetime.fromisoformat("2023-02-03")
     select_update_deadline = release_date + timedelta(weeks=2)
-    select_trusted_owner = "0x4d741d44348B21e97000A8C9f07Ee34110F7916F"
-    select_where_date_gt = datetime.fromisoformat("2022-12-01")
-    select_where_date_lt = datetime.fromisoformat("2023-03-10")
+    select_trusted_owner = ALLOWED_METRICS_SENDER
+    select_where_date_gt = period[0]  # datetime.fromisoformat("2022-12-01")
+    select_where_date_lt = period[1]  # datetime.fromisoformat("2023-03-10")
 
     values = await conn.fetch(
         sql,
@@ -203,7 +205,7 @@ async def query_ccn_measurements(conn: asyncpg.connection, asn_info: Dict):
         yield record['node_id'], CcnMeasurements.parse_obj(row)
 
 
-async def compute_ccn_scores() -> List[CcnScore]:
+async def compute_ccn_scores(period: Tuple[datetime, datetime]) -> List[CcnScore]:
     conn = await asyncpg.connect(
         user="aleph",
         password="569b8f23-0de6-4927-a15d-7157d8583e43",
@@ -215,7 +217,7 @@ async def compute_ccn_scores() -> List[CcnScore]:
     asn_info: Dict[str, Dict] = await query_ccn_asn_info(conn)
 
     result = []
-    async for node_id, measurements in query_ccn_measurements(conn, asn_info):
+    async for node_id, measurements in query_ccn_measurements(conn, asn_info, period):
 
         # This contains custom logic on the scores
         performance_score = (
@@ -236,9 +238,9 @@ async def compute_ccn_scores() -> List[CcnScore]:
             * measurements.file_download_latency_score_p25
             * measurements.file_download_latency_score_p95
 
-            * measurements.eth_height_remaining_score_p25
-            * measurements.eth_height_remaining_score_p95
-        ) ** (1/10)
+            # * measurements.eth_height_remaining_score_p25
+            # * measurements.eth_height_remaining_score_p95
+        ) ** (1/8)
 
         if measurements.node_version_missing > (
                 measurements.node_version_latest +
@@ -279,12 +281,15 @@ async def compute_ccn_scores() -> List[CcnScore]:
 
 
 if __name__ == '__main__':
-    ccn_scores = asyncio.run(compute_ccn_scores())
-    crn_scores = asyncio.run(compute_crn_scores())
+    from_date = datetime.fromisoformat("2022-12-01")
+    to_date = datetime.fromisoformat("2023-03-10")
+    period = (from_date, to_date)
+    ccn_scores = asyncio.run(compute_ccn_scores(period=period))
+    crn_scores = asyncio.run(compute_crn_scores(period=period))
 
     scores = NodeScores(
         ccn=ccn_scores,
         crn=crn_scores,
     )
-    with open("../scores.json", "w") as fd:
+    with open(Path(__file__).parent.parent.parent / "scores.json", "w") as fd:
         fd.write(scores.json(indent=4))
