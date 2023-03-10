@@ -1,6 +1,7 @@
 import asyncio.exceptions
 import logging
 import os
+import sys
 import time
 from enum import Enum
 from pathlib import Path
@@ -11,7 +12,8 @@ import schedule
 import sentry_sdk
 import typer
 from aleph.sdk.chains.ethereum import ETHAccount
-from aleph.sdk.user_session import AuthenticatedUserSession
+from aleph.sdk.client import AuthenticatedAlephClient, AlephClient
+from aleph_message.models import PostMessage, MessageType
 from click import BadParameter
 from hexbytes import HexBytes
 
@@ -83,17 +85,13 @@ async def publish_metrics_on_aleph(node_metrics: NodeMetrics):
     channel = settings.ALEPH_POST_TYPE_CHANNEL
     aleph_api_server = settings.NODE_DATA_HOST
 
-    aleph_session = AuthenticatedUserSession(
-        account=get_aleph_account(),
-        api_server=aleph_api_server,
-    )
-
     metrics_post_data = MetricsPost(tags=["mainnet"], metrics=node_metrics)
-    metrics_post, _ = await aleph_session.create_post(
-        post_content=metrics_post_data,
-        post_type=settings.ALEPH_POST_TYPE_METRICS,
-        channel=channel,
-    )
+    async with AuthenticatedAlephClient(account=get_aleph_account(), api_server=aleph_api_server) as client:
+        metrics_post, _ = await client.create_post(
+            post_content=metrics_post_data,
+            post_type=settings.ALEPH_POST_TYPE_METRICS,
+            channel=channel,
+        )
     logger.debug("Published metrics on Aleph: %s", metrics_post.item_hash)
 
 
@@ -101,19 +99,18 @@ async def publish_scores_on_aleph(node_scores: NodeScores):
     channel = settings.ALEPH_POST_TYPE_CHANNEL
     aleph_api_server = settings.NODE_DATA_HOST
 
-    aleph_session = AuthenticatedUserSession(
-        account=get_aleph_account(),
-        api_server=aleph_api_server,
+    scores_post_data = NodeScoresPost(
+        tags=["mainnet"],
+        # metrics_post=metrics_post.item_hash,
+        scores=node_scores
     )
 
-    scores_post_data = NodeScoresPost(
-        tags=["mainnet"], metrics_post=metrics_post.item_hash, scores=node_scores
-    )
-    scores_post, _ = await aleph_session.create_post(
-        post_content=scores_post_data,
-        post_type=settings.ALEPH_POST_TYPE_SCORES,
-        channel=channel,
-    )
+    async with AuthenticatedAlephClient(account=get_aleph_account(), api_server=aleph_api_server) as client:
+        scores_post, _ = await client.create_post(
+            post_content=scores_post_data,
+            post_type=settings.ALEPH_POST_TYPE_SCORES,
+            channel=channel,
+        )
     logger.debug("Published scores on Aleph: %s", scores_post.item_hash)
 
 
