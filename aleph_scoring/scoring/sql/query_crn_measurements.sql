@@ -61,8 +61,8 @@ SELECT crn ->> 'node_id'                                                        
 
 FROM posts,
      jsonb_array_elements(content -> 'metrics' -> 'crn') crn
-WHERE owner = '0x4d741d44348B21e97000A8C9f07Ee34110F7916F'
-  AND type = 'aleph-scoring-metrics'
-  AND to_timestamp((crn -> 'measured_at')::float)::date > '2022-02-01'::date
-  AND to_timestamp((crn -> 'measured_at')::float)::date < '2023-03-10'::date
+WHERE owner = '0x4D52380D3191274a04846c89c069E6C3F2Ed94e4'
+  AND type = 'test-aleph-scoring-metrics'
+  AND to_timestamp((crn -> 'measured_at')::float)::timestamp > '2022-02-01'::timestamp
+  AND to_timestamp((crn -> 'measured_at')::float)::timestamp < '2023-04-10'::timestamp
 GROUP BY crn ->> 'node_id'

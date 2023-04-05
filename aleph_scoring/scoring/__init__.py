@@ -50,6 +50,7 @@ async def query_crn_asn_info(
         period.from_date,
         period.to_date,
         "crn",
+        settings.ALEPH_POST_TYPE_METRICS,
     )
 
     result: Dict[str, Dict] = {}
@@ -90,6 +91,7 @@ async def query_crn_measurements(
         period.from_date,
         period.to_date,
         select_previous_version,
+        settings.ALEPH_POST_TYPE_METRICS,
     )
 
     for record in values:
@@ -182,6 +184,7 @@ async def query_ccn_asn_info(
     sql = read_sql_file("query_node_asn_info.template.sql")
 
     allowed_sender = settings.ALLOWED_METRICS_SENDER
+    post_type = settings.ALEPH_POST_TYPE_METRICS
 
     values = await conn.fetch(
         sql,
@@ -189,6 +192,7 @@ async def query_ccn_asn_info(
         period.from_date,
         period.to_date,
         "ccn",
+        post_type,
     )
 
     result: Dict[str, Dict] = {}
@@ -229,6 +233,7 @@ async def query_ccn_measurements(
         period.from_date,
         period.to_date,
         select_previous_version,
+        settings.ALEPH_POST_TYPE_METRICS,
     )
 
     for record in values:
