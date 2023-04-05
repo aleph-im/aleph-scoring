@@ -91,7 +91,7 @@ SELECT node ->> 'node_id'                                                  as no
 FROM posts,
      jsonb_array_elements(content -> 'metrics' -> 'ccn') node
 WHERE owner = $3
-  AND type = 'aleph-scoring-metrics'
-  AND to_timestamp((node -> 'measured_at')::float)::date > $4::date
-  AND to_timestamp((node -> 'measured_at')::float)::date < $5::date
+  AND type = $7
+  AND to_timestamp((node -> 'measured_at')::float)::timestamp > $4::timestamp
+  AND to_timestamp((node -> 'measured_at')::float)::timestamp < $5::timestamp
 GROUP BY node ->> 'node_id'

@@ -62,7 +62,7 @@ FROM posts,
      jsonb_array_elements(content -> 'metrics' -> 'crn') crn
 WHERE owner = $3
     /*owner = ANY($3::text[])*/
-  AND type = 'aleph-scoring-metrics'
-  AND to_timestamp((crn -> 'measured_at')::float)::date > $4::date
-  AND to_timestamp((crn -> 'measured_at')::float)::date < $5::date
+  AND type = $7
+  AND to_timestamp((crn -> 'measured_at')::float)::timestamp > $4::timestamp
+  AND to_timestamp((crn -> 'measured_at')::float)::timestamp < $5::timestamp
 GROUP BY crn ->> 'node_id'
