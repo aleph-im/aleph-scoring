@@ -12,6 +12,7 @@ import sentry_sdk
 import typer
 from aleph.sdk.chains.ethereum import ETHAccount
 from aleph.sdk.client import AuthenticatedAlephClient
+from aleph.sdk.types import Account
 from hexbytes import HexBytes
 
 from aleph_scoring.config import settings
@@ -43,13 +44,13 @@ def get_aleph_account():
     return account
 
 
-async def publish_metrics_on_aleph(node_metrics: NodeMetrics):
+async def publish_metrics_on_aleph(account: Account, node_metrics: NodeMetrics):
     channel = settings.ALEPH_POST_TYPE_CHANNEL
     aleph_api_server = settings.NODE_DATA_HOST
 
     metrics_post_data = MetricsPost(tags=["mainnet"], metrics=node_metrics)
     async with AuthenticatedAlephClient(
-        account=get_aleph_account(), api_server=aleph_api_server
+        account=account, api_server=aleph_api_server
     ) as client:
         metrics_post, status = await client.create_post(
             post_content=metrics_post_data,
@@ -61,7 +62,9 @@ async def publish_metrics_on_aleph(node_metrics: NodeMetrics):
     )
 
 
-async def publish_scores_on_aleph(node_scores: NodeScores, period: Period):
+async def publish_scores_on_aleph(
+    account: Account, node_scores: NodeScores, period: Period
+):
     channel = settings.ALEPH_POST_TYPE_CHANNEL
     aleph_api_server = settings.NODE_DATA_HOST
 
@@ -76,7 +79,7 @@ async def publish_scores_on_aleph(node_scores: NodeScores, period: Period):
     post_content["period"] = json.loads(period.json())
 
     async with AuthenticatedAlephClient(
-        account=get_aleph_account(), api_server=aleph_api_server
+        account=account, api_server=aleph_api_server
     ) as client:
         scores_post, status = await client.create_post(
             post_content=post_content,
@@ -105,7 +108,10 @@ def run_measurements(
     if stdout:
         print(node_metrics.json(indent=4))
     if publish:
-        asyncio.run(publish_metrics_on_aleph(node_metrics=node_metrics))
+        account = get_aleph_account()
+        asyncio.run(
+            publish_metrics_on_aleph(account=account, node_metrics=node_metrics)
+        )
 
 
 @app.command()
@@ -252,7 +258,8 @@ def compute_scores(
                 fd.write(result)
 
     if publish:
-        asyncio.run(publish_scores_on_aleph(scores, current_period))
+        account = get_aleph_account()
+        asyncio.run(publish_scores_on_aleph(account, scores, current_period))
 
 
 @app.command()
