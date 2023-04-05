@@ -288,7 +288,7 @@ async def compute_ccn_scores(
             )
             / 5
         ):
-            # Too many missing version metrics.
+            logger.debug(f"Too many missing version metrics for CRN node {node_id}")
             version_score = 0
         else:
             version_score = (
