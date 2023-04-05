@@ -123,12 +123,12 @@ def measure(
         default=False,
         help="Publish the results on Aleph.",
     ),
-    log: LogLevel = typer.Option(
-        default=LogLevel.INFO,
+    log_level: str = typer.Option(
+        default=LogLevel.INFO.name,
         help="Logging level",
     ),
 ):
-    logging.basicConfig(level=log)
+    logging.basicConfig(level=LogLevel[log_level])
     run_measurements(output=output, publish=publish)
 
 
@@ -141,19 +141,19 @@ def measure_on_schedule(
         default=False,
         help="Publish the results on Aleph.",
     ),
-    log: str = typer.Option(
+    log_level: str = typer.Option(
         default=LogLevel.INFO.name,
         help="Logging level",
     ),
 ):
-    logging.basicConfig(level=log)
-    compute_scores(output=output, publish=publish, log=log)
+    logging.basicConfig(level=LogLevel[log_level])
+    compute_scores(output=output, publish=publish, log_level=log_level)
 
     schedule.every(settings.DAEMON_MODE_PERIOD_HOURS).hours.at(":00").do(
         compute_scores,
         save=output,
         publish=publish,
-        log=log,
+        log_level=log_level,
     )
 
     logger.debug("Running the scheduler")
@@ -172,14 +172,14 @@ def measure_n_times(
         default=False,
         help="Publish the results on Aleph.",
     ),
-    log: str = typer.Option(
+    log_level: str = typer.Option(
         default=LogLevel.INFO.name,
         help="Logging level",
     ),
 ):
     """Measure the performance n times."""
 
-    logging.basicConfig(level=log)
+    logging.basicConfig(level=LogLevel[log_level])
 
     for i in range(n):
         t0 = time.time()
@@ -211,12 +211,12 @@ def compute_scores(
         default=False,
         help="Publish the results on Aleph.",
     ),
-    log: str = typer.Option(
+    log_level: str = typer.Option(
         default=LogLevel.INFO.name,
         help="Logging level",
     ),
 ):
-    logging.basicConfig(level=log)
+    logging.basicConfig(level=LogLevel[log_level])
 
     to_date = datetime.utcnow()
     from_date = to_date - settings.SCORE_METRICS_PERIOD
@@ -271,19 +271,19 @@ def compute_on_schedule(
         default=False,
         help="Publish the results on Aleph.",
     ),
-    log: str = typer.Option(
+    log_level: str = typer.Option(
         default=LogLevel.INFO.name,
         help="Logging level",
     ),
 ):
-    logging.basicConfig(level=log)
-    compute_scores(output=output, publish=publish, log=log)
+    logging.basicConfig(level=LogLevel[log_level])
+    compute_scores(output=output, publish=publish, log_level=log_level)
 
     schedule.every(settings.DAEMON_MODE_PERIOD_HOURS).hours.at(":00").do(
         compute_scores,
         save=output,
         publish=publish,
-        log=log,
+        log_level=log_level,
     )
 
     logger.debug("Running the scheduler")
