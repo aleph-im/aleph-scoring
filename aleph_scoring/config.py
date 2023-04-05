@@ -1,5 +1,6 @@
 import logging
 from datetime import timedelta
+from pathlib import Path
 from typing import Optional
 
 from pydantic import BaseSettings, HttpUrl
@@ -20,6 +21,8 @@ class Settings(BaseSettings):
     ALEPH_POST_TYPE_CHANNEL: Optional[str] = "aleph-scoring"
     ALEPH_POST_TYPE_METRICS: str = "test-aleph-scoring-metrics"
     ALEPH_POST_TYPE_SCORES: str = "test-aleph-scoring-scores"
+    ASN_DB_DIRECTORY: Path = "/srv/asn"
+    ASN_DB_PATH: str = "/tmp/asn_db.bz2"
     ASN_DB_REFRESH_PERIOD_DAYS: int = 1
     DAEMON_MODE_PERIOD_HOURS: int = 24
     EXPORT_DATAFRAME: bool = False

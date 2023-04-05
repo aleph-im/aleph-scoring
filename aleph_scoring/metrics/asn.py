@@ -172,21 +172,25 @@ def should_update_asn_db(asn_db_file: Path) -> bool:
 def get_asn_database() -> pyasn.pyasn:
     global _asn_db
 
-    asn_db_file = Path.cwd() / "asn_db"
-    as_names_files = Path.cwd() / "asnames.json"
+    asn_db_file = settings.ASN_DB_DIRECTORY / "asn_db"
+    as_names_files = settings.ASN_DB_DIRECTORY / "asnames.json"
 
     should_update_db = should_update_asn_db(asn_db_file)
 
     if should_update_db:
-        asn_archive_file = Path.cwd() / "asn_db.bz2"
+        asn_archive_file = settings.ASN_DB_DIRECTORY / "asn_db.bz2"
 
+        logger.info("Downloading ASN database...")
         update_asn_database(asn_archive_file)
+        logger.info("Converting ASN database...")
         convert_asn_database(asn_archive_file, asn_db_file)
+        logger.info("Updating names file...")
         update_names_file(as_names_files)
 
-        _asn_db = pyasn.pyasn(asn_db_file.name, as_names_file=str(as_names_files))
+        logger.info("Loading ASN database...")
+        _asn_db = pyasn.pyasn(str(asn_db_file), as_names_file=str(as_names_files))
 
     if should_update_db or _asn_db is None:
-        _asn_db = pyasn.pyasn(asn_db_file.name, as_names_file=str(as_names_files))
+        _asn_db = pyasn.pyasn(str(asn_db_file), as_names_file=str(as_names_files))
 
     return _asn_db
