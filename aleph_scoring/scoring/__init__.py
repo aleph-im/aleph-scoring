@@ -271,7 +271,15 @@ async def compute_ccn_scores(
             # * measurements.eth_height_remaining_score_p95
         ) ** (1 / 8)
 
-        if (
+        if not sum((
+            measurements.node_version_missing,
+            measurements.node_version_latest,
+            measurements.node_version_outdated,
+            measurements.node_version_obsolete,
+        )):
+            logger.warning(f"No version measurement for node {node_id}")
+            version_score = 0
+        elif (
             measurements.node_version_missing
             > (
                 measurements.node_version_latest
