@@ -141,8 +141,8 @@ def measure_on_schedule(
         default=False,
         help="Publish the results on Aleph.",
     ),
-    log: LogLevel = typer.Option(
-        default=LogLevel.INFO,
+    log: str = typer.Option(
+        default=LogLevel.INFO.name,
         help="Logging level",
     ),
 ):
@@ -172,8 +172,8 @@ def measure_n_times(
         default=False,
         help="Publish the results on Aleph.",
     ),
-    log: LogLevel = typer.Option(
-        default=LogLevel.INFO,
+    log: str = typer.Option(
+        default=LogLevel.INFO.name,
         help="Logging level",
     ),
 ):
@@ -211,8 +211,8 @@ def compute_scores(
         default=False,
         help="Publish the results on Aleph.",
     ),
-    log: LogLevel = typer.Option(
-        default=LogLevel.INFO,
+    log: str = typer.Option(
+        default=LogLevel.INFO.name,
         help="Logging level",
     ),
 ):
@@ -271,8 +271,8 @@ def compute_on_schedule(
         default=False,
         help="Publish the results on Aleph.",
     ),
-    log: LogLevel = typer.Option(
-        default=LogLevel.INFO,
+    log: str = typer.Option(
+        default=LogLevel.INFO.name,
         help="Logging level",
     ),
 ):
