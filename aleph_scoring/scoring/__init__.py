@@ -150,9 +150,9 @@ async def compute_crn_scores(
             measurements.nodes_with_identical_asn / measurements.total_nodes
         )
 
-        total_score = (performance_score * version_score * decentralization_score) ** (
-            1 / 3
-        )
+        total_score = (performance_score * version_score) ** (
+            1 / 2
+        ) * decentralization_score
 
         result.append(
             CrnScore(
@@ -296,9 +296,9 @@ async def compute_ccn_scores(
             measurements.nodes_with_identical_asn / measurements.total_nodes
         )
 
-        total_score = (performance_score * version_score * decentralization_score) ** (
-            1 / 3
-        )
+        total_score = (performance_score * version_score) ** (
+            1 / 2
+        ) * decentralization_score
 
         result.append(
             CcnScore(
