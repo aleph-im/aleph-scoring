@@ -86,6 +86,10 @@ SELECT node ->> 'node_id'                                                  as no
                                  node ->> 'version' != $1 and
                                  to_timestamp((node -> 'measured_at')::float)::date > $2::date
                      ) then 1 end)                                         as node_version_obsolete,
+       count(case
+                 when (
+                                 node ->> 'version' != $1 and node ->> 'version' != $6
+                     ) then 1 end)                                         as node_version_other,
        count(case when (coalesce(node ->> 'version', '') = '') then 1 end) as node_version_missing
 
 FROM posts,

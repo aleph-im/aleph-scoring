@@ -57,6 +57,10 @@ SELECT crn ->> 'node_id'                                                        
                                  crn ->> 'version' != '0.2.5' and
                                  to_timestamp((crn -> 'measured_at')::float)::date > '2022-10-20'::date
                      ) then 1 end)                                              as node_version_obsolete,
+       count(case
+                 when (
+                                 crn ->> 'version' != '0.2.5' and crn ->> 'version' != '0.2.4'
+                     ) then 1 end)                                              as node_version_other,
        count(case when (coalesce(crn ->> 'version', '') = '') then 1 end)       as node_version_missing
 
 FROM posts,
