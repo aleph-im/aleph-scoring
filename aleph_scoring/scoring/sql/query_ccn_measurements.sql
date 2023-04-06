@@ -86,6 +86,10 @@ SELECT node ->> 'node_id'                                                  as no
                                  node ->> 'version' != 'v0.4.4' and
                                  to_timestamp((node -> 'measured_at')::float)::date > '2022-10-20'::date
                      ) then 1 end)                                         as node_version_obsolete,
+      count(case
+                 when (
+                                 node ->> 'version' != 'v0.4.4' and node ->> 'version' != 'v0.4.3'
+                     ) then 1 end)                                         as node_version_other,
        count(case when (coalesce(node ->> 'version', '') = '') then 1 end) as node_version_missing
 
 FROM posts,
@@ -93,5 +97,5 @@ FROM posts,
 WHERE owner = ANY (ARRAY ['0x4D52380D3191274a04846c89c069E6C3F2Ed94e4', '0x4D52380D3191274a04846c89c069E6C3F2Ed94e4'])
   AND type = 'test-aleph-scoring-metrics'
   AND to_timestamp((node -> 'measured_at')::float)::timestamp > '2022-02-01'::timestamp
-  AND to_timestamp((node -> 'measured_at')::float)::timestamp < '2023-04-10'::timestamp
+  AND to_timestamp((node -> 'measured_at')::float)::timestamp < '2024-01-01'::timestamp
 GROUP BY node ->> 'node_id'

@@ -57,6 +57,10 @@ SELECT crn ->> 'node_id'                                                        
                                  crn ->> 'version' != $1 and
                                  to_timestamp((crn -> 'measured_at')::float)::date > $2::date
                      ) then 1 end)                                              as node_version_obsolete,
+      count(case
+                 when (
+                                 crn ->> 'version' != $1 and crn ->> 'version' != $6
+                     ) then 1 end)                                              as node_version_other,
        count(case when (coalesce(crn ->> 'version', '') = '') then 1 end)       as node_version_missing
 FROM posts,
      jsonb_array_elements(content -> 'metrics' -> 'crn') crn
