@@ -125,12 +125,22 @@ async def compute_crn_scores(
             # * measurements.full_check_latency_score_p95
         ) ** (1 / 4)
 
-        if (
+        if not sum((
+            measurements.node_version_missing,
+            measurements.node_version_latest,
+            measurements.node_version_outdated,
+            measurements.node_version_obsolete,
+            measurements.node_version_other,
+        )):
+            logger.warning(f"No version measurement for node {node_id}")
+            version_score = 0
+        elif (
             measurements.node_version_missing
             > (
                 measurements.node_version_latest
                 + measurements.node_version_outdated
                 + measurements.node_version_obsolete
+                + measurements.node_version_other
             )
             / 5
         ):
@@ -144,6 +154,7 @@ async def compute_crn_scores(
                 + measurements.node_version_outdated
                 + measurements.node_version_obsolete
                 + measurements.node_version_missing
+                + measurements.node_version_other
             )
 
         decentralization_score = 1 - (
@@ -276,6 +287,7 @@ async def compute_ccn_scores(
             measurements.node_version_latest,
             measurements.node_version_outdated,
             measurements.node_version_obsolete,
+            measurements.node_version_other,
         )):
             logger.warning(f"No version measurement for node {node_id}")
             version_score = 0
@@ -285,6 +297,7 @@ async def compute_ccn_scores(
                 measurements.node_version_latest
                 + measurements.node_version_outdated
                 + measurements.node_version_obsolete
+                + measurements.node_version_other
             )
             / 5
         ):
@@ -298,6 +311,7 @@ async def compute_ccn_scores(
                 + measurements.node_version_outdated
                 + measurements.node_version_obsolete
                 + measurements.node_version_missing
+                + + measurements.node_version_other
             )
 
         decentralization_score = 1 - (
