@@ -152,7 +152,7 @@ async def compute_crn_scores(
 
         total_score = (performance_score * version_score) ** (
             1 / 2
-        ) * (decentralization_score ** 2)
+        )
 
         result.append(
             CrnScore(
@@ -306,7 +306,7 @@ async def compute_ccn_scores(
 
         total_score = (performance_score * version_score) ** (
             1 / 2
-        ) * (decentralization_score ** 2)
+        )
 
         result.append(
             CcnScore(
