@@ -326,10 +326,15 @@ async def get_crn_metrics(
 
     asn, as_name = lookup_asn(asn_db, url)
 
+    # Get the version over IPv4 or IPv6
+    async with aiohttp.ClientSession(
+        timeout=timeout
+    ) as session:
+        version = await get_crn_version(session=session, node_url=url)
+
     async with aiohttp.ClientSession(
         timeout=timeout, connector=aiohttp.TCPConnector(family=socket.AF_INET6)
     ) as session:
-        version = await get_crn_version(session=session, node_url=url)
 
         base_latency = (
             await measure_http_latency(
