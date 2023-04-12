@@ -245,8 +245,20 @@ async def get_ccn_metrics(
 
     asn, as_name = lookup_asn(asn_db, url)
 
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        base_latency = (
+    # Fetch the base latency using strict IPv4
+    async with aiohttp.ClientSession(
+        timeout=timeout, connector=aiohttp.TCPConnector(family=socket.AF_INET)
+    ) as session_ipv4:
+        base_latency_ipv4 = (
+            await measure_http_latency(session_ipv4, f"{url}api/v0/info/public.json")
+        )[0]
+
+    # Fetch most metrics using either IPv4 or IPv6
+    async with aiohttp.ClientSession(
+            timeout=timeout
+    ) as session:
+        # Fetch base latency again in order to pre-open the session
+        _ = (
             await measure_http_latency(session, f"{url}api/v0/info/public.json")
         )[0]
         metrics_latency = (
@@ -279,6 +291,14 @@ async def get_ccn_metrics(
             json_object = CcnApiMetricsResponse()
         version = json_object.version()
 
+    # Fetch the base latency using strict IPv6
+    async with aiohttp.ClientSession(
+        timeout=timeout, connector=aiohttp.TCPConnector(family=socket.AF_INET6)
+    ) as session_ipv6:
+        base_latency_ipv6 = (
+            await measure_http_latency(session_ipv6, f"{url}api/v0/info/public.json")
+        )[0]
+
         return CcnMetrics(
             measured_at=measured_at.timestamp(),
             node_id=node_info.hash,
@@ -287,7 +307,8 @@ async def get_ccn_metrics(
             as_name=as_name,
             version=version,
             # days_outdated=compute_ccn_version_days_outdated(version=version),
-            base_latency=base_latency,
+            base_latency=base_latency_ipv6 or base_latency_ipv4,  # allow either IPv6 or IPv4 for now
+            base_latency_ipv4=base_latency_ipv4,
             metrics_latency=metrics_latency,
             aggregate_latency=aggregate_latency,
             file_download_latency=file_download_latency,
@@ -305,7 +326,9 @@ async def get_crn_metrics(
 
     asn, as_name = lookup_asn(asn_db, url)
 
-    async with aiohttp.ClientSession(timeout=timeout) as session:
+    async with aiohttp.ClientSession(
+        timeout=timeout, connector=aiohttp.TCPConnector(family=socket.AF_INET6)
+    ) as session:
         version = await get_crn_version(session=session, node_url=url)
 
         base_latency = (
@@ -331,6 +354,17 @@ async def get_crn_metrics(
             )
         )[0]
 
+    async with aiohttp.ClientSession(
+        timeout=timeout, connector=aiohttp.TCPConnector(family=socket.AF_INET)
+    ) as session_ipv6:
+        base_latency_ipv4 = (
+            await measure_http_latency(
+                session_ipv6,
+                f"{url}about/login",
+                expected_status=401,
+            )
+        )[0]
+
         return CrnMetrics(
             measured_at=measured_at.timestamp(),
             node_id=node_info.hash,
@@ -340,6 +374,7 @@ async def get_crn_metrics(
             version=version,
             # days_outdated=compute_crn_version_days_outdated(version=version),
             base_latency=base_latency,
+            base_latency_ipv4=base_latency_ipv4,
             diagnostic_vm_latency=diagnostic_vm_latency,
             full_check_latency=full_check_latency,
         )
