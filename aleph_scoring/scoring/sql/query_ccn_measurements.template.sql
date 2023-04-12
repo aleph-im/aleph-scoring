@@ -76,6 +76,7 @@ SELECT node ->> 'node_id'                                                  as no
            , 0)                                                            as eth_height_remaining_score_p95,
 
        count(case when (node ->> 'version' = $1) then 1 end)               as node_version_latest,
+       count(case when (node ->> 'version' = $8) then 1 end)               as node_version_prerelease,
        count(case
                  when (
                                  node ->> 'version' = $6 and
@@ -88,7 +89,7 @@ SELECT node ->> 'node_id'                                                  as no
                      ) then 1 end)                                         as node_version_obsolete,
        count(case
                  when (
-                                 node ->> 'version' != $1 and node ->> 'version' != $6
+                                 node ->> 'version' != $1 and node ->> 'version' != $6 and node ->> 'version' != $8
                      ) then 1 end)                                         as node_version_other,
        count(case when (coalesce(node ->> 'version', '') = '') then 1 end) as node_version_missing
 

@@ -22,6 +22,7 @@ class BaseNodeMeasurements(BaseModel):
     node_version_obsolete: int
     node_version_missing: int
     node_version_other: int
+    node_version_prerelease: int
 
 
 class CrnMeasurements(BaseNodeMeasurements):
