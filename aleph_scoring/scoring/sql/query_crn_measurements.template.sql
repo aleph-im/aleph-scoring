@@ -47,6 +47,7 @@ SELECT crn ->> 'node_id'                                                        
        count(case when (crn -> 'full_check_latency')::float is null then 1 end) as full_check_latency_missing,
 
        count(case when (crn ->> 'version' = $1) then 1 end)                     as node_version_latest,
+       count(case when (crn ->> 'version' = $8) then 1 end)                     as node_version_prerelease,
        count(case
                  when (
                                  crn ->> 'version' = $6 and
@@ -59,7 +60,7 @@ SELECT crn ->> 'node_id'                                                        
                      ) then 1 end)                                              as node_version_obsolete,
       count(case
                  when (
-                                 crn ->> 'version' != $1 and crn ->> 'version' != $6
+                                 crn ->> 'version' != $1 and crn ->> 'version' != $6 and crn ->> 'version' != $8
                      ) then 1 end)                                              as node_version_other,
        count(case when (coalesce(crn ->> 'version', '') = '') then 1 end)       as node_version_missing
 FROM posts,

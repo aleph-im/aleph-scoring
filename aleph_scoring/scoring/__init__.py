@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import asyncpg
 
@@ -73,7 +73,8 @@ async def query_crn_measurements(
     asn_info: Dict,
     period: Period,
     last_release: GithubRelease,
-    previous_release: GithubRelease,
+    previous_release: Optional[GithubRelease],
+    prerelease: Optional[GithubRelease],
 ):
     sql = read_sql_file("query_crn_measurements.template.sql")
 
@@ -92,6 +93,7 @@ async def query_crn_measurements(
         period.to_date,
         select_previous_version,
         settings.ALEPH_POST_TYPE_METRICS,
+        prerelease.tag_name if prerelease else None,
     )
 
     for record in values:
@@ -101,7 +103,10 @@ async def query_crn_measurements(
 
 
 async def compute_crn_scores(
-    period: Period, last_release: GithubRelease, previous_release
+    period: Period,
+    last_release: GithubRelease,
+    previous_release: Optional[GithubRelease],
+    prerelease: Optional[GithubRelease],
 ) -> List[CrnScore]:
     conn = await database_connection(settings)
 
@@ -109,7 +114,12 @@ async def compute_crn_scores(
 
     result = []
     async for node_id, measurements in query_crn_measurements(
-        conn, asn_info, period, last_release, previous_release
+        conn,
+        asn_info,
+        period,
+        last_release,
+        previous_release,
+        prerelease,
     ):
         # This contains custom logic on the scores
         performance_score = (
@@ -125,13 +135,16 @@ async def compute_crn_scores(
             # * measurements.full_check_latency_score_p95
         ) ** (1 / 4)
 
-        if not sum((
-            measurements.node_version_missing,
-            measurements.node_version_latest,
-            measurements.node_version_outdated,
-            measurements.node_version_obsolete,
-            measurements.node_version_other,
-        )):
+        if not sum(
+            (
+                measurements.node_version_missing,
+                measurements.node_version_latest,
+                measurements.node_version_outdated,
+                measurements.node_version_obsolete,
+                measurements.node_version_other,
+                measurements.node_version_prerelease,
+            )
+        ):
             logger.warning(f"No version measurement for node {node_id}")
             version_score = 0
         elif (
@@ -141,6 +154,7 @@ async def compute_crn_scores(
                 + measurements.node_version_outdated
                 + measurements.node_version_obsolete
                 + measurements.node_version_other
+                + measurements.node_version_prerelease
             )
             / 5
         ):
@@ -148,22 +162,23 @@ async def compute_crn_scores(
             version_score = 0
         else:
             version_score = (
-                measurements.node_version_latest + measurements.node_version_outdated
+                measurements.node_version_latest
+                + measurements.node_version_outdated
+                + measurements.node_version_prerelease
             ) / (
                 measurements.node_version_latest
                 + measurements.node_version_outdated
                 + measurements.node_version_obsolete
                 + measurements.node_version_missing
                 + measurements.node_version_other
+                + measurements.node_version_prerelease
             )
 
-        decentralization_score = (1 - (
-            measurements.nodes_with_identical_asn / measurements.total_nodes
-        )) ** 2
+        decentralization_score = (
+            1 - (measurements.nodes_with_identical_asn / measurements.total_nodes)
+        ) ** 2
 
-        total_score = (performance_score * version_score) ** (
-            1 / 2
-        )
+        total_score = (performance_score * version_score) ** (1 / 2)
 
         result.append(
             CrnScore(
@@ -226,7 +241,8 @@ async def query_ccn_measurements(
     asn_info: Dict,
     period: Period,
     last_release: GithubRelease,
-    previous_release: GithubRelease,
+    previous_release: Optional[GithubRelease],
+    prerelease: Optional[GithubRelease],
 ):
     sql = read_sql_file("query_ccn_measurements.template.sql")
 
@@ -245,6 +261,7 @@ async def query_ccn_measurements(
         period.to_date,
         select_previous_version,
         settings.ALEPH_POST_TYPE_METRICS,
+        prerelease.tag_name if prerelease else None,
     )
 
     for record in values:
@@ -254,7 +271,10 @@ async def query_ccn_measurements(
 
 
 async def compute_ccn_scores(
-    period: Period, last_release, previous_release
+    period: Period,
+    last_release: GithubRelease,
+    previous_release: Optional[GithubRelease],
+    prerelease: Optional[GithubRelease],
 ) -> List[CcnScore]:
     conn = await database_connection(settings)
 
@@ -262,7 +282,12 @@ async def compute_ccn_scores(
 
     result = []
     async for node_id, measurements in query_ccn_measurements(
-        conn, asn_info, period, last_release, previous_release
+        conn,
+        asn_info,
+        period,
+        last_release,
+        previous_release,
+        prerelease=prerelease,
     ):
         # This contains custom logic on the scores
         performance_score = (
@@ -282,13 +307,16 @@ async def compute_ccn_scores(
             # * measurements.eth_height_remaining_score_p95
         ) ** (1 / 8)
 
-        if not sum((
-            measurements.node_version_missing,
-            measurements.node_version_latest,
-            measurements.node_version_outdated,
-            measurements.node_version_obsolete,
-            measurements.node_version_other,
-        )):
+        if not sum(
+            (
+                measurements.node_version_missing,
+                measurements.node_version_latest,
+                measurements.node_version_outdated,
+                measurements.node_version_obsolete,
+                measurements.node_version_other,
+                measurements.node_version_prerelease,
+            )
+        ):
             logger.warning(f"No version measurement for node {node_id}")
             version_score = 0
         elif (
@@ -298,6 +326,7 @@ async def compute_ccn_scores(
                 + measurements.node_version_outdated
                 + measurements.node_version_obsolete
                 + measurements.node_version_other
+                + measurements.node_version_prerelease
             )
             / 5
         ):
@@ -305,22 +334,23 @@ async def compute_ccn_scores(
             version_score = 0
         else:
             version_score = (
-                measurements.node_version_latest + measurements.node_version_outdated
+                measurements.node_version_latest
+                + measurements.node_version_outdated
+                + measurements.node_version_prerelease
             ) / (
                 measurements.node_version_latest
                 + measurements.node_version_outdated
                 + measurements.node_version_obsolete
                 + measurements.node_version_missing
-                + + measurements.node_version_other
+                + measurements.node_version_other
+                + measurements.node_version_prerelease
             )
 
-        decentralization_score = (1 - (
-            measurements.nodes_with_identical_asn / measurements.total_nodes
-        )) ** 2
+        decentralization_score = (
+            1 - (measurements.nodes_with_identical_asn / measurements.total_nodes)
+        ) ** 2
 
-        total_score = (performance_score * version_score) ** (
-            1 / 2
-        )
+        total_score = (performance_score * version_score) ** (1 / 2)
 
         result.append(
             CcnScore(
@@ -350,18 +380,23 @@ if __name__ == "__main__":
     from_date = to_date - settings.SCORE_METRICS_PERIOD
     current_period = Period(from_date=from_date, to_date=to_date)
 
-    latest_ccn_release, previous_ccn_release = get_latest_github_releases(
-        "aleph-im", "pyaleph"
-    )
-    latest_crn_release, previous_crn_release = get_latest_github_releases(
-        "aleph-im", "aleph-vm"
-    )
+    (
+        latest_ccn_release,
+        previous_ccn_release,
+        latest_ccn_prerelease,
+    ) = get_latest_github_releases("aleph-im", "pyaleph")
+    (
+        latest_crn_release,
+        previous_crn_release,
+        latest_crn_prerelease,
+    ) = get_latest_github_releases("aleph-im", "aleph-vm")
 
     ccn_scores = asyncio.run(
         compute_ccn_scores(
             period=current_period,
             last_release=latest_ccn_release,
             previous_release=previous_ccn_release,
+            prerelease=latest_ccn_prerelease,
         )
     )
     crn_scores = asyncio.run(
@@ -369,6 +404,7 @@ if __name__ == "__main__":
             period=current_period,
             last_release=latest_crn_release,
             previous_release=previous_crn_release,
+            prerelease=latest_crn_prerelease,
         )
     )
 
