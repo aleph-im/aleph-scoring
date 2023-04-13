@@ -4,6 +4,7 @@ import re
 import socket
 import time
 from datetime import datetime
+from random import shuffle
 from typing import (
     Any,
     Awaitable,
@@ -439,14 +440,16 @@ async def collect_node_metrics(
 
 
 async def collect_all_ccn_metrics(node_data: Dict[str, Any]) -> Sequence[CcnMetrics]:
-    node_infos = get_api_node_urls(node_data)
+    node_infos = list(get_api_node_urls(node_data))
+    shuffle(node_infos)  # Avoid artifacts from the order in the list
     return await collect_node_metrics(
         node_infos=node_infos, metrics_function=get_ccn_metrics
     )
 
 
 async def collect_all_crn_metrics(node_data: Dict[str, Any]) -> Sequence[CrnMetrics]:
-    node_infos = get_compute_resource_node_urls(node_data)
+    node_infos = list(get_compute_resource_node_urls(node_data))
+    shuffle(node_infos)  # Avoid artifacts from the order in the list
     return await collect_node_metrics(
         node_infos=node_infos, metrics_function=get_crn_metrics
     )
