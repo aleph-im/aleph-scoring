@@ -301,11 +301,13 @@ async def compute_ccn_scores(
             # Suspend using full_check_latency_score_p95 since most nodes
             # have very bad values
             * measurements.aggregate_latency_score_p95
-            * measurements.file_download_latency_score_p25
-            * measurements.file_download_latency_score_p95
+
+            # * measurements.file_download_latency_score_p25
+            # * measurements.file_download_latency_score_p95
+
             # * measurements.eth_height_remaining_score_p25
             # * measurements.eth_height_remaining_score_p95
-        ) ** (1 / 8)
+        ) ** (1 / 6)
 
         if not sum(
             (
