@@ -4,7 +4,7 @@ import re
 import socket
 import time
 from datetime import datetime
-from random import shuffle
+from random import shuffle, random
 from typing import (
     Any,
     Awaitable,
@@ -18,7 +18,7 @@ from typing import (
     Sequence,
     Tuple,
     TypeVar,
-    Union,
+    Union, NewType,
 )
 from urllib.parse import urlparse
 
@@ -54,6 +54,20 @@ CRN_DIAGNOSTIC_VM_PATH = (
     "{url}vm/67705389842a0a1b95eaa408b009741027964edc805997475e95c505d642edd8",
 )
 IP4_SERVICE_URL = "https://v4.ident.me/"
+
+
+TimeoutGenerator = NewType('TimeoutGenerator', Callable[[], aiohttp.ClientTimeout])
+
+
+def timeout_generator(total: float, connect: float, sock_connect: float, sock_read: float) -> TimeoutGenerator:
+    def randomize(value: float) -> float:
+        return value + value * 0.3 * random()
+    return lambda: aiohttp.ClientTimeout(
+        total=randomize(total),
+        connect=randomize(connect),
+        sock_connect=randomize(sock_connect),
+        sock_read=randomize(sock_read)
+    )
 
 
 class NodeInfo(BaseModel):
@@ -112,7 +126,7 @@ async def measure_http_latency(
     expected_status: int = 200,
 ) -> Tuple[Optional[float], Optional[Any]]:
     try:
-        async with async_timeout.timeout(timeout_seconds):
+        async with async_timeout.timeout(timeout_seconds + timeout_seconds * 0.3 * random()):
             start = time.time()
             async with session.get(url) as resp:
                 if resp.status != expected_status:
@@ -152,7 +166,7 @@ async def get_crn_version(
     # Retrieve the CRN version from header `server`.
     try:
         async with async_timeout.timeout(
-            settings.HTTP_REQUEST_TIMEOUT,
+            settings.HTTP_REQUEST_TIMEOUT + settings.HTTP_REQUEST_TIMEOUT * 0.3 * random(),
         ):
             async with session.get(node_url) as resp:
                 resp.raise_for_status()
@@ -239,8 +253,11 @@ class CcnApiMetricsResponse(BaseModel):
 
 
 async def get_ccn_metrics(
-    timeout: aiohttp.ClientTimeout, asn_db: pyasn.pyasn, node_info: NodeInfo
+    timeout_generator: TimeoutGenerator, asn_db: pyasn.pyasn, node_info: NodeInfo
 ) -> CcnMetrics:
+    # Avoid doing all the calls at the same time
+    await asyncio.sleep(random() * 30)
+
     url = node_info.url.url
     measured_at = datetime.utcnow()
 
@@ -248,7 +265,7 @@ async def get_ccn_metrics(
 
     # Fetch the base latency using strict IPv4
     async with aiohttp.ClientSession(
-        timeout=timeout,
+        timeout=timeout_generator(),
         connector=aiohttp.TCPConnector(
             family=socket.AF_INET,
             keepalive_timeout=300,
@@ -262,7 +279,7 @@ async def get_ccn_metrics(
 
     # Fetch most metrics using either IPv4 or IPv6
     async with aiohttp.ClientSession(
-        timeout=timeout,
+        timeout=timeout_generator(),
         connector=aiohttp.TCPConnector(
             family=0,  # either IPv4 or IPv6
             keepalive_timeout=300,
@@ -337,22 +354,25 @@ async def get_ccn_metrics(
 
 
 async def get_crn_metrics(
-    timeout: aiohttp.ClientTimeout, asn_db: pyasn.pyasn, node_info: NodeInfo
+    timeout_generator: TimeoutGenerator, asn_db: pyasn.pyasn, node_info: NodeInfo
 ) -> CrnMetrics:
+    # Avoid doing all the calls at the same time
+    await asyncio.sleep(random() * 30)
+
     url = node_info.url.url
     measured_at = datetime.utcnow()
 
     asn, as_name = lookup_asn(asn_db, url)
 
     # Get the version over IPv4 or IPv6
-    async with aiohttp.ClientSession(timeout=timeout) as session_any_ip:
+    async with aiohttp.ClientSession(timeout=timeout_generator()) as session_any_ip:
         for attempt in range(3):
             version = await get_crn_version(session=session_any_ip, node_url=url)
             if version:
                 break
 
     async with aiohttp.ClientSession(
-        timeout=timeout,
+        timeout=timeout_generator(),
         connector=aiohttp.TCPConnector(
             family=socket.AF_INET6,
             keepalive_timeout=300,
@@ -387,7 +407,7 @@ async def get_crn_metrics(
         )[0]
 
     async with aiohttp.ClientSession(
-        timeout=timeout,
+        timeout=timeout_generator(),
         connector=aiohttp.TCPConnector(
             family=socket.AF_INET,
             keepalive_timeout=300,
@@ -427,11 +447,11 @@ M = TypeVar("M", bound=AlephNodeMetrics)
 async def collect_node_metrics(
     node_infos: Iterable[NodeInfo],
     metrics_function: Callable[
-        [aiohttp.ClientTimeout, pyasn.pyasn, NodeInfo], Awaitable[M]
+        [TimeoutGenerator, pyasn.pyasn, NodeInfo], Awaitable[M]
     ],
 ) -> Sequence[Union[M, BaseException]]:
     asn_db = get_asn_database()
-    timeout = aiohttp.ClientTimeout(
+    timeout = timeout_generator(
         total=60.0, connect=10.0, sock_connect=10.0, sock_read=60.0
     )
     return await asyncio.gather(
