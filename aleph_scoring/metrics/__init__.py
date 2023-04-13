@@ -330,7 +330,10 @@ async def get_crn_metrics(
     async with aiohttp.ClientSession(
         timeout=timeout
     ) as session_any_ip:
-        version = await get_crn_version(session=session_any_ip, node_url=url)
+        for attempt in range(3):
+            version = await get_crn_version(session=session_any_ip, node_url=url)
+            if version:
+                break
 
     async with aiohttp.ClientSession(
         timeout=timeout, connector=aiohttp.TCPConnector(family=socket.AF_INET6)
