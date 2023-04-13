@@ -299,23 +299,23 @@ async def get_ccn_metrics(
             await measure_http_latency(session_ipv6, f"{url}api/v0/info/public.json")
         )[0]
 
-        return CcnMetrics(
-            measured_at=measured_at.timestamp(),
-            node_id=node_info.hash,
-            url=url,
-            asn=asn,
-            as_name=as_name,
-            version=version,
-            # days_outdated=compute_ccn_version_days_outdated(version=version),
-            base_latency=base_latency_ipv6 or base_latency_ipv4,  # allow either IPv6 or IPv4 for now
-            base_latency_ipv4=base_latency_ipv4,
-            metrics_latency=metrics_latency,
-            aggregate_latency=aggregate_latency,
-            file_download_latency=file_download_latency,
-            txs_total=json_object.pyaleph_status_sync_pending_txs_total,
-            pending_messages=json_object.pyaleph_status_sync_pending_messages_total,  # noqa:E501
-            eth_height_remaining=json_object.pyaleph_status_chain_eth_height_remaining_total,
-        )
+    return CcnMetrics(
+        measured_at=measured_at.timestamp(),
+        node_id=node_info.hash,
+        url=url,
+        asn=asn,
+        as_name=as_name,
+        version=version,
+        # days_outdated=compute_ccn_version_days_outdated(version=version),
+        base_latency=base_latency_ipv6 or base_latency_ipv4,  # allow either IPv6 or IPv4 for now
+        base_latency_ipv4=base_latency_ipv4,
+        metrics_latency=metrics_latency,
+        aggregate_latency=aggregate_latency,
+        file_download_latency=file_download_latency,
+        txs_total=json_object.pyaleph_status_sync_pending_txs_total,
+        pending_messages=json_object.pyaleph_status_sync_pending_messages_total,  # noqa:E501
+        eth_height_remaining=json_object.pyaleph_status_chain_eth_height_remaining_total,
+    )
 
 
 async def get_crn_metrics(
@@ -329,12 +329,15 @@ async def get_crn_metrics(
     # Get the version over IPv4 or IPv6
     async with aiohttp.ClientSession(
         timeout=timeout
-    ) as session:
-        version = await get_crn_version(session=session, node_url=url)
+    ) as session_any_ip:
+        version = await get_crn_version(session=session_any_ip, node_url=url)
 
     async with aiohttp.ClientSession(
         timeout=timeout, connector=aiohttp.TCPConnector(family=socket.AF_INET6)
     ) as session:
+
+        # Warmup the session
+        _ = await get_crn_version(session=session, node_url=url)
 
         base_latency = (
             await measure_http_latency(
@@ -361,28 +364,31 @@ async def get_crn_metrics(
 
     async with aiohttp.ClientSession(
         timeout=timeout, connector=aiohttp.TCPConnector(family=socket.AF_INET)
-    ) as session_ipv6:
+    ) as session_ipv4:
+        # Warmup the session
+        _ = await get_crn_version(session=session_ipv4, node_url=url)
+
         base_latency_ipv4 = (
             await measure_http_latency(
-                session_ipv6,
+                session_ipv4,
                 f"{url}about/login",
                 expected_status=401,
             )
         )[0]
 
-        return CrnMetrics(
-            measured_at=measured_at.timestamp(),
-            node_id=node_info.hash,
-            url=url,
-            asn=asn,
-            as_name=as_name,
-            version=version,
-            # days_outdated=compute_crn_version_days_outdated(version=version),
-            base_latency=base_latency,
-            base_latency_ipv4=base_latency_ipv4,
-            diagnostic_vm_latency=diagnostic_vm_latency,
-            full_check_latency=full_check_latency,
-        )
+    return CrnMetrics(
+        measured_at=measured_at.timestamp(),
+        node_id=node_info.hash,
+        url=url,
+        asn=asn,
+        as_name=as_name,
+        version=version,
+        # days_outdated=compute_crn_version_days_outdated(version=version),
+        base_latency=base_latency,
+        base_latency_ipv4=base_latency_ipv4,
+        diagnostic_vm_latency=diagnostic_vm_latency,
+        full_check_latency=full_check_latency,
+    )
 
 
 M = TypeVar("M", bound=AlephNodeMetrics)
