@@ -15,7 +15,7 @@ SELECT node ->> 'node_id'                                                  as no
        decent server should be able to respond within 2 seconds and have a score. */
        greatest(
                    1 -
-                   percentile_disc(0.95) WITHIN GROUP (ORDER BY COALESCE((node -> 'base_latency')::float, 100.)) / 2,
+                   percentile_disc(0.95) WITHIN GROUP (ORDER BY COALESCE((node -> 'base_latency')::float, 100.)) / 4,
                    0
            )                                                               as base_latency_score_p95,
 
