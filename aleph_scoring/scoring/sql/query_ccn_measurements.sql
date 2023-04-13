@@ -29,7 +29,7 @@ SELECT node ->> 'node_id'                                                  as no
        greatest(
                    1 -
                    percentile_disc(0.95) WITHIN GROUP (ORDER BY COALESCE((node -> 'metrics_latency')::float, 100.)) /
-                   2.5,
+                   5,
                    0
            )                                                               as metrics_latency_score_p95,
 
@@ -43,7 +43,7 @@ SELECT node ->> 'node_id'                                                  as no
        greatest(
                    1 -
                    percentile_disc(0.95) WITHIN GROUP (ORDER BY COALESCE((node -> 'aggregate_latency')::float, 100.)) /
-                   4,
+                   8,
                    0
            )                                                               as aggregate_latency_score_p95,
 
@@ -55,7 +55,7 @@ SELECT node ->> 'node_id'                                                  as no
 
        greatest(
                    1 - percentile_disc(0.95)
-                       WITHIN GROUP (ORDER BY COALESCE((node -> 'file_download_latency')::float, 100.)) / 4,
+                       WITHIN GROUP (ORDER BY COALESCE((node -> 'file_download_latency')::float, 100.)) / 8,
                    0
            )                                                               as file_download_latency_score_p95,
 
