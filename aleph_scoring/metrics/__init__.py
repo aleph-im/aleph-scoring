@@ -247,7 +247,13 @@ async def get_ccn_metrics(
 
     # Fetch the base latency using strict IPv4
     async with aiohttp.ClientSession(
-        timeout=timeout, connector=aiohttp.TCPConnector(family=socket.AF_INET)
+        timeout=timeout,
+        connector=aiohttp.TCPConnector(
+            family=socket.AF_INET,
+            keepalive_timeout=300,
+            limit=1000,
+            limit_per_host=20,
+        ),
     ) as session_ipv4:
         base_latency_ipv4 = (
             await measure_http_latency(session_ipv4, f"{url}api/v0/info/public.json")
@@ -255,12 +261,16 @@ async def get_ccn_metrics(
 
     # Fetch most metrics using either IPv4 or IPv6
     async with aiohttp.ClientSession(
-            timeout=timeout
+        timeout=timeout,
+        connector=aiohttp.TCPConnector(
+            family=0,  # either IPv4 or IPv6
+            keepalive_timeout=300,
+            limit=1000,
+            limit_per_host=20,
+        ),
     ) as session:
         # Fetch base latency again in order to pre-open the session
-        _ = (
-            await measure_http_latency(session, f"{url}api/v0/info/public.json")
-        )[0]
+        _ = (await measure_http_latency(session, f"{url}api/v0/info/public.json"))[0]
         metrics_latency = (
             await measure_http_latency(
                 session, f"{url}metrics.json", settings.HTTP_REQUEST_TIMEOUT
@@ -293,7 +303,13 @@ async def get_ccn_metrics(
 
     # Fetch the base latency using strict IPv6
     async with aiohttp.ClientSession(
-        timeout=timeout, connector=aiohttp.TCPConnector(family=socket.AF_INET6)
+        timeout=timeout,
+        connector=aiohttp.TCPConnector(
+            family=socket.AF_INET6,
+            keepalive_timeout=300,
+            limit=1000,
+            limit_per_host=20,
+        ),
     ) as session_ipv6:
         base_latency_ipv6 = (
             await measure_http_latency(session_ipv6, f"{url}api/v0/info/public.json")
@@ -307,7 +323,8 @@ async def get_ccn_metrics(
         as_name=as_name,
         version=version,
         # days_outdated=compute_ccn_version_days_outdated(version=version),
-        base_latency=base_latency_ipv6 or base_latency_ipv4,  # allow either IPv6 or IPv4 for now
+        base_latency=base_latency_ipv6
+        or base_latency_ipv4,  # allow either IPv6 or IPv4 for now
         base_latency_ipv4=base_latency_ipv4,
         metrics_latency=metrics_latency,
         aggregate_latency=aggregate_latency,
@@ -327,18 +344,21 @@ async def get_crn_metrics(
     asn, as_name = lookup_asn(asn_db, url)
 
     # Get the version over IPv4 or IPv6
-    async with aiohttp.ClientSession(
-        timeout=timeout
-    ) as session_any_ip:
+    async with aiohttp.ClientSession(timeout=timeout) as session_any_ip:
         for attempt in range(3):
             version = await get_crn_version(session=session_any_ip, node_url=url)
             if version:
                 break
 
     async with aiohttp.ClientSession(
-        timeout=timeout, connector=aiohttp.TCPConnector(family=socket.AF_INET6)
+        timeout=timeout,
+        connector=aiohttp.TCPConnector(
+            family=socket.AF_INET6,
+            keepalive_timeout=300,
+            limit=1000,
+            limit_per_host=20,
+        ),
     ) as session:
-
         # Warmup the session
         _ = await get_crn_version(session=session, node_url=url)
 
@@ -366,7 +386,13 @@ async def get_crn_metrics(
         )[0]
 
     async with aiohttp.ClientSession(
-        timeout=timeout, connector=aiohttp.TCPConnector(family=socket.AF_INET)
+        timeout=timeout,
+        connector=aiohttp.TCPConnector(
+            family=socket.AF_INET,
+            keepalive_timeout=300,
+            limit=1000,
+            limit_per_host=20,
+        ),
     ) as session_ipv4:
         # Warmup the session
         _ = await get_crn_version(session=session_ipv4, node_url=url)
