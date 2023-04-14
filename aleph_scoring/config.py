@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     DATABASE_PORT = 5432
 
     ALEPH_POST_TYPE_CHANNEL: Optional[str] = "aleph-scoring"
-    ALEPH_POST_TYPE_METRICS: str = "test-aleph-scoring-metrics"
+    ALEPH_POST_TYPE_METRICS: str = "test-aleph-network-metrics"
     ALEPH_POST_TYPE_SCORES: str = "test-aleph-scoring-scores"
     ASN_DB_DIRECTORY: Path = "/srv/asn"
     ASN_DB_PATH: str = "/tmp/asn_db.bz2"
@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     SENTRY_DSN: Optional[HttpUrl] = None
 
     VERSION_GRACE_PERIOD: timedelta = timedelta(weeks=2)
-    SCORE_METRICS_PERIOD: timedelta = timedelta(weeks=4)
+    SCORE_METRICS_PERIOD: timedelta = timedelta(days=1)  # TODO: bring back to 2 weeks
 
     class Config:
         env_file = ".env"
