@@ -327,18 +327,22 @@ async def get_ccn_metrics(
         version = json_object.version()
 
     # Fetch the base latency using strict IPv6
-    async with aiohttp.ClientSession(
-        timeout=timeout,
-        connector=aiohttp.TCPConnector(
-            family=socket.AF_INET6,
-            keepalive_timeout=300,
-            limit=1000,
-            limit_per_host=20,
-        ),
-    ) as session_ipv6:
-        base_latency_ipv6 = (
-            await measure_http_latency(session_ipv6, f"{url}api/v0/info/public.json")
-        )[0]
+    # async with aiohttp.ClientSession(
+    #     timeout=timeout_generator(),
+    #     connector=aiohttp.TCPConnector(
+    #         family=socket.AF_INET6,
+    #         keepalive_timeout=300,
+    #         limit=1000,
+    #         limit_per_host=20,
+    #     ),
+    # ) as session_ipv6:
+    #     _ = (await measure_http_latency(session_ipv6, f"{url}api/v0/info/public.json"))[0]
+    #     base_latency_ipv6 = (
+    #         await measure_http_latency(session_ipv6, f"{url}api/v0/info/public.json")
+    #     )[0]
+
+    # There is currently no IPv6 in the multiaddr of CCNs
+    base_latency_ipv6 = None
 
     return CcnMetrics(
         measured_at=measured_at.timestamp(),
