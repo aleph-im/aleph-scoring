@@ -18,7 +18,8 @@ from typing import (
     Sequence,
     Tuple,
     TypeVar,
-    Union, NewType,
+    Union,
+    NewType,
 )
 from urllib.parse import urlparse
 
@@ -56,17 +57,20 @@ CRN_DIAGNOSTIC_VM_PATH = (
 IP4_SERVICE_URL = "https://v4.ident.me/"
 
 
-TimeoutGenerator = NewType('TimeoutGenerator', Callable[[], aiohttp.ClientTimeout])
+TimeoutGenerator = NewType("TimeoutGenerator", Callable[[], aiohttp.ClientTimeout])
 
 
-def timeout_generator(total: float, connect: float, sock_connect: float, sock_read: float) -> TimeoutGenerator:
+def timeout_generator(
+    total: float, connect: float, sock_connect: float, sock_read: float
+) -> TimeoutGenerator:
     def randomize(value: float) -> float:
         return value + value * 0.3 * random()
+
     return lambda: aiohttp.ClientTimeout(
         total=randomize(total),
         connect=randomize(connect),
         sock_connect=randomize(sock_connect),
-        sock_read=randomize(sock_read)
+        sock_read=randomize(sock_read),
     )
 
 
@@ -126,7 +130,9 @@ async def measure_http_latency(
     expected_status: int = 200,
 ) -> Tuple[Optional[float], Optional[Any]]:
     try:
-        async with async_timeout.timeout(timeout_seconds + timeout_seconds * 0.3 * random()):
+        async with async_timeout.timeout(
+            timeout_seconds + timeout_seconds * 0.3 * random()
+        ):
             start = time.time()
             async with session.get(url) as resp:
                 if resp.status != expected_status:
@@ -166,7 +172,8 @@ async def get_crn_version(
     # Retrieve the CRN version from header `server`.
     try:
         async with async_timeout.timeout(
-            settings.HTTP_REQUEST_TIMEOUT + settings.HTTP_REQUEST_TIMEOUT * 0.3 * random(),
+            settings.HTTP_REQUEST_TIMEOUT
+            + settings.HTTP_REQUEST_TIMEOUT * 0.3 * random(),
         ):
             async with session.get(node_url) as resp:
                 resp.raise_for_status()
@@ -446,9 +453,7 @@ M = TypeVar("M", bound=AlephNodeMetrics)
 
 async def collect_node_metrics(
     node_infos: Iterable[NodeInfo],
-    metrics_function: Callable[
-        [TimeoutGenerator, pyasn.pyasn, NodeInfo], Awaitable[M]
-    ],
+    metrics_function: Callable[[TimeoutGenerator, pyasn.pyasn, NodeInfo], Awaitable[M]],
 ) -> Sequence[Union[M, BaseException]]:
     asn_db = get_asn_database()
     timeout = timeout_generator(
