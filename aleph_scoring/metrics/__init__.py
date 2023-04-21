@@ -222,22 +222,6 @@ def lookup_asn(
     return asn, asn_db.get_as_name(asn)
 
 
-def compute_ccn_version_days_outdated(version):
-    latest_release = get_github_release(
-        owner="aleph-im", repository="pyaleph", release=f"tags/{version}"
-    )
-    # TODO
-    return
-
-
-def compute_crn_version_days_outdated(version):
-    latest_release = get_github_release(
-        owner="aleph-im", repository="aleph-vm", release=f"tags/{version}"
-    )
-    # TODO
-    pass
-
-
 class CcnBuildInfo(BaseModel):
     python_version: str
     version: str
