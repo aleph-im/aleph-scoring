@@ -75,27 +75,52 @@ SELECT node ->> 'node_id'                                                  as no
                     )
            , 0)                                                            as eth_height_remaining_score_p95,
 
-       count(case when (node ->> 'version' = 'v0.4.4') then 1 end)         as node_version_latest,
-       count(case
-                 when (
-                                 node ->> 'version' = 'v0.4.3' and
-                                 to_timestamp((node -> 'measured_at')::float)::date <= '2022-10-20'::date
-                     ) then 1 end)                                         as node_version_outdated,
-       count(case
-                 when (
-                                 node ->> 'version' != 'v0.4.4' and
-                                 to_timestamp((node -> 'measured_at')::float)::date > '2022-10-20'::date
-                     ) then 1 end)                                         as node_version_obsolete,
-      count(case
-                 when (
-                                 node ->> 'version' != 'v0.4.4' and node ->> 'version' != 'v0.4.3'
-                     ) then 1 end)                                         as node_version_other,
-       count(case when (coalesce(node ->> 'version', '') = '') then 1 end) as node_version_missing
+        count(
+            case
+                when (
+                    annotate_version('pyaleph', node ->> 'version',
+                                     to_timestamp((node ->> 'measured_at')::float)::date) = 'latest'
+                    ) then 1 end)
+            as node_version_latest,
+
+        count(
+            case
+                when (
+                    annotate_version('pyaleph', node ->> 'version',
+                                     to_timestamp((node ->> 'measured_at')::float)::date) = 'prerelease'
+                    ) then 1 end)
+            as node_version_prerelease,
+
+        count(
+            case
+                when (
+                    annotate_version('pyaleph', node ->> 'version',
+                                     to_timestamp((node ->> 'measured_at')::float)::date) = 'outdated'
+                    ) then 1 end)
+            as node_version_outdated,
+
+        count(
+            case
+                when (
+                    annotate_version('pyaleph', node ->> 'version',
+                                     to_timestamp((node ->> 'measured_at')::float)::date) = 'obsolete'
+                    ) then 1 end)
+            as node_version_obsolete,
+
+        count(
+            case
+                when (
+                    annotate_version('pyaleph', node ->> 'version',
+                                     to_timestamp((node ->> 'measured_at')::float)::date) = 'other'
+                    ) then 1 end)
+            as node_version_other,
+
+        count(case when (coalesce(node ->> 'version', '') = '') then 1 end) as node_version_missing
 
 FROM posts,
      jsonb_array_elements(content -> 'metrics' -> 'ccn') node
 WHERE owner = ANY (ARRAY ['0x4D52380D3191274a04846c89c069E6C3F2Ed94e4', '0x4D52380D3191274a04846c89c069E6C3F2Ed94e4'])
-  AND type = 'test-aleph-scoring-metrics'
+  AND type = 'aleph-network-metrics'
   AND to_timestamp((node -> 'measured_at')::float)::timestamp > '2022-02-01'::timestamp
   AND to_timestamp((node -> 'measured_at')::float)::timestamp < '2024-01-01'::timestamp
 GROUP BY node ->> 'node_id'

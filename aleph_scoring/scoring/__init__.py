@@ -246,22 +246,12 @@ async def query_ccn_measurements(
 ):
     sql = read_sql_file("query_ccn_measurements.template.sql")
 
-    select_last_version = last_release.tag_name
-    select_previous_version = previous_release.tag_name
-    release_date = last_release.published_at
-    select_update_deadline = release_date + settings.VERSION_GRACE_PERIOD
-    select_trusted_owner = settings.ALLOWED_METRICS_SENDER
-
     values = await conn.fetch(
         sql,
-        select_last_version,
-        select_update_deadline,
-        select_trusted_owner,
+        settings.ALLOWED_METRICS_SENDER,
+        settings.ALEPH_POST_TYPE_METRICS,
         period.from_date,
         period.to_date,
-        select_previous_version,
-        settings.ALEPH_POST_TYPE_METRICS,
-        prerelease.tag_name if prerelease else None,
     )
 
     for record in values:
