@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import asyncpg
 
@@ -15,7 +15,6 @@ from aleph_scoring.scoring.models import (
     NodeScores,
 )
 from aleph_scoring.utils import (
-    GithubRelease,
     Period,
     database_connection,
     get_latest_github_releases,
@@ -72,28 +71,15 @@ async def query_crn_measurements(
     conn: asyncpg.connection,
     asn_info: Dict,
     period: Period,
-    last_release: GithubRelease,
-    previous_release: Optional[GithubRelease],
-    prerelease: Optional[GithubRelease],
 ):
     sql = read_sql_file("query_crn_measurements.template.sql")
 
-    select_last_version = last_release.tag_name
-    select_previous_version = previous_release.tag_name
-    release_date = last_release.published_at
-    select_update_deadline = release_date + settings.VERSION_GRACE_PERIOD
-    select_trusted_owner = settings.ALLOWED_METRICS_SENDER
-
     values = await conn.fetch(
         sql,
-        select_last_version,
-        select_update_deadline,
-        select_trusted_owner,
+        settings.ALLOWED_METRICS_SENDER,
+        settings.ALEPH_POST_TYPE_METRICS,
         period.from_date,
         period.to_date,
-        select_previous_version,
-        settings.ALEPH_POST_TYPE_METRICS,
-        prerelease.tag_name if prerelease else None,
     )
 
     for record in values:
@@ -104,9 +90,6 @@ async def query_crn_measurements(
 
 async def compute_crn_scores(
     period: Period,
-    last_release: GithubRelease,
-    previous_release: Optional[GithubRelease],
-    prerelease: Optional[GithubRelease],
 ) -> List[CrnScore]:
     conn = await database_connection(settings)
 
@@ -117,9 +100,6 @@ async def compute_crn_scores(
         conn,
         asn_info,
         period,
-        last_release,
-        previous_release,
-        prerelease,
     ):
         # This contains custom logic on the scores
         performance_score = (
@@ -240,9 +220,6 @@ async def query_ccn_measurements(
     conn: asyncpg.connection,
     asn_info: Dict,
     period: Period,
-    last_release: GithubRelease,
-    previous_release: Optional[GithubRelease],
-    prerelease: Optional[GithubRelease],
 ):
     sql = read_sql_file("query_ccn_measurements.template.sql")
 
@@ -262,9 +239,6 @@ async def query_ccn_measurements(
 
 async def compute_ccn_scores(
     period: Period,
-    last_release: GithubRelease,
-    previous_release: Optional[GithubRelease],
-    prerelease: Optional[GithubRelease],
 ) -> List[CcnScore]:
     conn = await database_connection(settings)
 
@@ -275,9 +249,6 @@ async def compute_ccn_scores(
         conn,
         asn_info,
         period,
-        last_release,
-        previous_release,
-        prerelease=prerelease,
     ):
         # This contains custom logic on the scores
         performance_score = (
@@ -386,17 +357,11 @@ if __name__ == "__main__":
     ccn_scores = asyncio.run(
         compute_ccn_scores(
             period=current_period,
-            last_release=latest_ccn_release,
-            previous_release=previous_ccn_release,
-            prerelease=latest_ccn_prerelease,
         )
     )
     crn_scores = asyncio.run(
         compute_crn_scores(
             period=current_period,
-            last_release=latest_crn_release,
-            previous_release=previous_crn_release,
-            prerelease=latest_crn_prerelease,
         )
     )
 

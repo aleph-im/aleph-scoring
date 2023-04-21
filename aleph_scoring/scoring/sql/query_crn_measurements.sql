@@ -1,72 +1,97 @@
-SELECT crn ->> 'node_id'                                                        as node_id,
+SELECT node ->> 'node_id'                                                        as node_id,
 
-       count((crn -> 'base_latency')::float > 0)                                as base_latency_present,
-       count(case when (crn -> 'base_latency')::float is null then 1 end)       as base_latency_missing,
+       count((node -> 'base_latency')::float > 0)                                as base_latency_present,
+       count(case when (node -> 'base_latency')::float is null then 1 end)       as base_latency_missing,
 
     /* Compute the score as 1 - half of the base latency. The worst pings across Earth are around 600ms, so any
        decent server should be able to respond within 2 seconds and have a score. */
        greatest(
-                   1 - percentile_disc(0.25) WITHIN GROUP (ORDER BY COALESCE((crn -> 'base_latency')::float, 100.)) / 2,
+                   1 - percentile_disc(0.25) WITHIN GROUP (ORDER BY COALESCE((node -> 'base_latency')::float, 100.)) / 2,
                    0
            )                                                                    as base_latency_score_p25,
 
     /* Compute the score as 1 - half of the base latency. The worst pings across Earth are around 600ms, so any
        decent server should be able to respond within 2 seconds and have a score. */
        greatest(
-                   1 - percentile_disc(0.95) WITHIN GROUP (ORDER BY COALESCE((crn -> 'base_latency')::float, 100.)) / 2,
+                   1 - percentile_disc(0.95) WITHIN GROUP (ORDER BY COALESCE((node -> 'base_latency')::float, 100.)) / 2,
                    0
            )                                                                    as base_latency_score_p95,
 
        greatest(
                    1 - percentile_disc(0.25)
-                       WITHIN GROUP (ORDER BY COALESCE((crn -> 'diagnostic_vm_latency')::float, 100.)) / 2.5,
+                       WITHIN GROUP (ORDER BY COALESCE((node -> 'diagnostic_vm_latency')::float, 100.)) / 2.5,
                    0
            )                                                                    as diagnostic_vm_latency_score_p25,
 
        greatest(
                    1 - percentile_disc(0.95)
-                       WITHIN GROUP (ORDER BY COALESCE((crn -> 'diagnostic_vm_latency')::float, 100.)) / 2.5,
+                       WITHIN GROUP (ORDER BY COALESCE((node -> 'diagnostic_vm_latency')::float, 100.)) / 2.5,
                    0
            )                                                                    as diagnostic_vm_latency_score_p95,
 
        greatest(
                    1 -
-                   percentile_disc(0.25) WITHIN GROUP (ORDER BY COALESCE((crn -> 'full_check_latency')::float, 100.)) /
+                   percentile_disc(0.25) WITHIN GROUP (ORDER BY COALESCE((node -> 'full_check_latency')::float, 100.)) /
                    4,
                    0
            )                                                                    as full_check_latency_score_p25,
 
        greatest(
                    1 -
-                   percentile_disc(0.95) WITHIN GROUP (ORDER BY COALESCE((crn -> 'full_check_latency')::float, 100.)) /
+                   percentile_disc(0.95) WITHIN GROUP (ORDER BY COALESCE((node -> 'full_check_latency')::float, 100.)) /
                    4,
                    0
            )                                                                    as full_check_latency_score_p95,
 
-       count((crn -> 'full_check_latency')::float > 0)                          as full_check_latency_present,
-       count(case when (crn -> 'full_check_latency')::float is null then 1 end) as full_check_latency_missing,
+       count((node -> 'full_check_latency')::float > 0)                          as full_check_latency_present,
+       count(case when (node -> 'full_check_latency')::float is null then 1 end) as full_check_latency_missing,
 
-       count(case when (crn ->> 'version' = '0.2.5') then 1 end)                as node_version_latest,
-       count(case
-                 when (
-                                 crn ->> 'version' = '0.2.4' and
-                                 to_timestamp((crn -> 'measured_at')::float)::date <= '2022-10-20'::date
-                     ) then 1 end)                                              as node_version_outdated,
-       count(case
-                 when (
-                                 crn ->> 'version' != '0.2.5' and
-                                 to_timestamp((crn -> 'measured_at')::float)::date > '2022-10-20'::date
-                     ) then 1 end)                                              as node_version_obsolete,
-       count(case
-                 when (
-                                 crn ->> 'version' != '0.2.5' and crn ->> 'version' != '0.2.4'
-                     ) then 1 end)                                              as node_version_other,
-       count(case when (coalesce(crn ->> 'version', '') = '') then 1 end)       as node_version_missing
+       count(
+            case
+                when (
+                    annotate_version('aleph-vm', node ->> 'version',
+                                     to_timestamp((node ->> 'measured_at')::float)::date) = 'latest'
+                    ) then 1 end)
+            as node_version_latest,
+
+        count(
+            case
+                when (
+                    annotate_version('aleph-vm', node ->> 'version',
+                                     to_timestamp((node ->> 'measured_at')::float)::date) = 'prerelease'
+                    ) then 1 end)
+            as node_version_prerelease,
+
+        count(
+            case
+                when (
+                    annotate_version('aleph-vm', node ->> 'version',
+                                     to_timestamp((node ->> 'measured_at')::float)::date) = 'outdated'
+                    ) then 1 end)
+            as node_version_outdated,
+
+        count(
+            case
+                when (
+                    annotate_version('aleph-vm', node ->> 'version',
+                                     to_timestamp((node ->> 'measured_at')::float)::date) = 'obsolete'
+                    ) then 1 end)
+            as node_version_obsolete,
+
+        count(
+            case
+                when (
+                    annotate_version('aleph-vm', node ->> 'version',
+                                     to_timestamp((node ->> 'measured_at')::float)::date) = 'other'
+                    ) then 1 end)
+            as node_version_other,
+
+        count(case when (coalesce(node ->> 'version', '') = '') then 1 end) as node_version_missing
 
 FROM posts,
-     jsonb_array_elements(content -> 'metrics' -> 'crn') crn
+     jsonb_array_elements(content -> 'metrics' -> 'crn') node
 WHERE owner = '0x4D52380D3191274a04846c89c069E6C3F2Ed94e4'
-  AND type = 'test-aleph-scoring-metrics'
-  AND to_timestamp((crn -> 'measured_at')::float)::timestamp > '2022-02-01'::timestamp
-  AND to_timestamp((crn -> 'measured_at')::float)::timestamp < '2023-04-10'::timestamp
-GROUP BY crn ->> 'node_id'
+  AND type = 'aleph-network-metrics'
+  AND to_timestamp((node -> 'measured_at')::float)::timestamp > '2022-02-01'::timestamp
+  AND to_timestamp((node -> 'measured_at')::float)::timestamp < '2024-04-10'::timestamp
+GROUP BY node ->> 'node_id'

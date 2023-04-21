@@ -222,31 +222,25 @@ def compute_scores(
     from_date = to_date - settings.SCORE_METRICS_PERIOD
     current_period = Period(from_date=from_date, to_date=to_date)
 
-    (
-        latest_ccn_release,
-        previous_ccn_release,
-        latest_ccn_prerelease,
-    ) = get_latest_github_releases("aleph-im", "pyaleph")
-    (
-        latest_crn_release,
-        previous_crn_release,
-        latest_crn_prerelease,
-    ) = get_latest_github_releases("aleph-im", "aleph-vm")
+    # (
+    #     latest_ccn_release,
+    #     previous_ccn_release,
+    #     latest_ccn_prerelease,
+    # ) = get_latest_github_releases("aleph-im", "pyaleph")
+    # (
+    #     latest_crn_release,
+    #     previous_crn_release,
+    #     latest_crn_prerelease,
+    # ) = get_latest_github_releases("aleph-im", "aleph-vm")
 
     ccn_scores = asyncio.run(
         compute_ccn_scores(
             period=current_period,
-            last_release=latest_ccn_release,
-            previous_release=previous_ccn_release,
-            prerelease=latest_ccn_prerelease,
         )
     )
     crn_scores = asyncio.run(
         compute_crn_scores(
             period=current_period,
-            last_release=latest_crn_release,
-            previous_release=previous_crn_release,
-            prerelease=latest_crn_prerelease,
         )
     )
 
