@@ -15,7 +15,7 @@ SELECT node ->> 'node_id'                                                  as no
        decent server should be able to respond within 2 seconds and have a score. */
        greatest(
                    1 -
-                   percentile_disc(0.95) WITHIN GROUP (ORDER BY COALESCE((node -> 'base_latency')::float, 100.)) / 4,
+                   percentile_disc(0.80) WITHIN GROUP (ORDER BY COALESCE((node -> 'base_latency')::float, 100.)) / 4,
                    0
            )                                                               as base_latency_score_p95,
 
@@ -28,7 +28,7 @@ SELECT node ->> 'node_id'                                                  as no
 
        greatest(
                    1 -
-                   percentile_disc(0.95) WITHIN GROUP (ORDER BY COALESCE((node -> 'metrics_latency')::float, 100.)) /
+                   percentile_disc(0.80) WITHIN GROUP (ORDER BY COALESCE((node -> 'metrics_latency')::float, 100.)) /
                    5,
                    0
            )                                                               as metrics_latency_score_p95,
@@ -42,7 +42,7 @@ SELECT node ->> 'node_id'                                                  as no
 
        greatest(
                    1 -
-                   percentile_disc(0.95) WITHIN GROUP (ORDER BY COALESCE((node -> 'aggregate_latency')::float, 100.)) /
+                   percentile_disc(0.80) WITHIN GROUP (ORDER BY COALESCE((node -> 'aggregate_latency')::float, 100.)) /
                    8,
                    0
            )                                                               as aggregate_latency_score_p95,
@@ -54,7 +54,7 @@ SELECT node ->> 'node_id'                                                  as no
            )                                                               as file_download_latency_score_p25,
 
        greatest(
-                   1 - percentile_disc(0.95)
+                   1 - percentile_disc(0.80)
                        WITHIN GROUP (ORDER BY COALESCE((node -> 'file_download_latency')::float, 100.)) / 8,
                    0
            )                                                               as file_download_latency_score_p95,
@@ -69,7 +69,7 @@ SELECT node ->> 'node_id'                                                  as no
 
        greatest(least
                     (
-                            2 - percentile_disc(0.95)
+                            2 - percentile_disc(0.80)
                                 WITHIN GROUP (ORDER BY COALESCE((node -> 'eth_height_remaining')::int, 1000.)) / 275.,
                             1
                     )
