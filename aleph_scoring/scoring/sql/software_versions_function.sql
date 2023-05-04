@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION annotate_version(software_name varchar, version_name varchar, version_date timestamp)
+CREATE OR REPLACE FUNCTION annotate_version(software_name varchar, version_name varchar, version_date timestamp with time zone)
     RETURNS VARCHAR
     language plpgsql
 as
