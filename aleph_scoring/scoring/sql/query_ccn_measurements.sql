@@ -79,7 +79,7 @@ SELECT node ->> 'node_id'                                                  as no
             case
                 when (
                     annotate_version('pyaleph', node ->> 'version',
-                                     to_timestamp((node ->> 'measured_at')::float)::date) = 'latest'
+                                     to_timestamp((node->>'measured_at')::float)::timestamptz) = 'latest'
                     ) then 1 end)
             as node_version_latest,
 
@@ -87,7 +87,7 @@ SELECT node ->> 'node_id'                                                  as no
             case
                 when (
                     annotate_version('pyaleph', node ->> 'version',
-                                     to_timestamp((node ->> 'measured_at')::float)::date) = 'prerelease'
+                                     to_timestamp((node->>'measured_at')::float)::timestamptz) = 'prerelease'
                     ) then 1 end)
             as node_version_prerelease,
 
@@ -95,7 +95,7 @@ SELECT node ->> 'node_id'                                                  as no
             case
                 when (
                     annotate_version('pyaleph', node ->> 'version',
-                                     to_timestamp((node ->> 'measured_at')::float)::date) = 'outdated'
+                                     to_timestamp((node->>'measured_at')::float)::timestamptz) = 'outdated'
                     ) then 1 end)
             as node_version_outdated,
 
@@ -103,7 +103,7 @@ SELECT node ->> 'node_id'                                                  as no
             case
                 when (
                     annotate_version('pyaleph', node ->> 'version',
-                                     to_timestamp((node ->> 'measured_at')::float)::date) = 'obsolete'
+                                     to_timestamp((node->>'measured_at')::float)::timestamptz) = 'obsolete'
                     ) then 1 end)
             as node_version_obsolete,
 
@@ -111,7 +111,7 @@ SELECT node ->> 'node_id'                                                  as no
             case
                 when (
                     annotate_version('pyaleph', node ->> 'version',
-                                     to_timestamp((node ->> 'measured_at')::float)::date) = 'other'
+                                     to_timestamp((node->>'measured_at')::float)::timestamptz) = 'other'
                     ) then 1 end)
             as node_version_other,
 
