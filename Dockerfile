@@ -5,6 +5,7 @@ RUN apt-get update && apt-get -y upgrade && apt-get install -y \
     build-essential \
     python3-dev \
     git \
+    iputils-ping \
     && rm -rf /var/lib/apt/lists/*
 
 COPY Pipfile /opt/Pipfile
