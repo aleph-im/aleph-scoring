@@ -240,6 +240,8 @@ async def ping(
     )
     if result.is_alive:
         return result.avg_rtt
+
+    logger.debug("Ping %s timed out", str(ip_address))
     return None
 
 
@@ -452,7 +454,7 @@ async def get_crn_metrics(
         )[0]
 
         if diagnostic_vm_latency is not None:
-            vm_ping_response_time = ping_vm(
+            vm_ping_response_time = await ping_vm(
                 crn_url=node_info.url.url, vm_hash=CRN_DIAGNOSTIC_VM_HASH
             )
         else:
