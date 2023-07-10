@@ -1,0 +1,371 @@
+import asyncio
+import logging
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List
+
+import asyncpg
+
+from aleph_scoring.config import settings
+from aleph_scoring.scoring.models import (
+    CcnMeasurements,
+    CcnScore,
+    CrnMeasurements,
+    CrnScore,
+    NodeScores,
+)
+from aleph_scoring.utils import (
+    Period,
+    database_connection,
+    get_latest_github_releases,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def read_sql_file(filename: str):
+    with open(Path(__file__).parent / "sql" / filename) as fd:
+        return fd.read()
+
+
+async def query_crn_asn_info(
+    conn: asyncpg.connection, period: Period
+) -> Dict[str, Dict]:
+    """Query node autonomous system numbers (ASN).
+
+    ASN is used to compute how decentralized a node is relative to other nodes
+    in the network.
+
+    ASN metrics is queried independently of the other metrics
+    as to avoid issues related to the group by node_id.
+    """
+    sql = read_sql_file("query_node_asn_info.template.sql")
+
+    allowed_sender = settings.ALLOWED_METRICS_SENDER
+
+    values = await conn.fetch(
+        sql,
+        allowed_sender,
+        period.from_date,
+        period.to_date,
+        "crn",
+        settings.ALEPH_POST_TYPE_METRICS,
+    )
+
+    result: Dict[str, Dict] = {}
+    for row in values:
+        if row["node_id"] in result and result[row["node_id"]]["asn"]:
+            # Do not update results that contain an ASN,
+            # focus on those where it is missing
+            continue
+
+        result[row["node_id"]] = {
+            "asn": row["asn"],
+            "total_nodes": row["total_nodes"],
+            "nodes_with_identical_asn": row["nodes_with_identical_asn"],
+        }
+    return result
+
+
+async def query_crn_measurements(
+    conn: asyncpg.connection,
+    asn_info: Dict,
+    period: Period,
+):
+    sql = read_sql_file("query_crn_measurements.template.sql")
+
+    values = await conn.fetch(
+        sql,
+        settings.ALLOWED_METRICS_SENDER,
+        settings.ALEPH_POST_TYPE_METRICS,
+        period.from_date,
+        period.to_date,
+    )
+
+    for record in values:
+        row = dict(record)
+        row.update(asn_info[record["node_id"]])
+        yield record["node_id"], CrnMeasurements.parse_obj(row)
+
+
+async def compute_crn_scores(
+    period: Period,
+) -> List[CrnScore]:
+    conn = await database_connection(settings)
+
+    asn_info: Dict[str, Dict] = await query_crn_asn_info(conn, period=period)
+
+    result = []
+    async for node_id, measurements in query_crn_measurements(
+        conn,
+        asn_info,
+        period,
+    ):
+        # This contains custom logic on the scores
+        performance_score = (
+            measurements.base_latency_score_p25
+            * measurements.base_latency_score_p95
+            * measurements.diagnostic_vm_latency_score_p25
+            # Suspend using diagnostic_vm_latency_score_p95 since most nodes
+            # have very bad values
+            # * measurements.diagnostic_vm_latency_score_p95
+            * measurements.full_check_latency_score_p25
+            # Suspend using full_check_latency_score_p95 since most nodes
+            # have very bad values
+            # * measurements.full_check_latency_score_p95
+        ) ** (1 / 4)
+
+        if not sum(
+            (
+                measurements.node_version_missing,
+                measurements.node_version_latest,
+                measurements.node_version_outdated,
+                measurements.node_version_obsolete,
+                measurements.node_version_other,
+                measurements.node_version_prerelease,
+            )
+        ):
+            logger.warning(f"No version measurement for node {node_id}")
+            version_score = 0
+        elif (
+            measurements.node_version_missing
+            > (
+                measurements.node_version_latest
+                + measurements.node_version_outdated
+                + measurements.node_version_obsolete
+                + measurements.node_version_other
+                + measurements.node_version_prerelease
+            )
+            / 5
+        ):
+            # Too many missing version metrics.
+            version_score = 0
+        else:
+            version_score = (
+                measurements.node_version_latest
+                + measurements.node_version_outdated
+                + measurements.node_version_prerelease
+            ) / (
+                measurements.node_version_latest
+                + measurements.node_version_outdated
+                + measurements.node_version_obsolete
+                + measurements.node_version_missing
+                + measurements.node_version_other
+                + measurements.node_version_prerelease
+            )
+
+        decentralization_score = (
+            1 - (measurements.nodes_with_identical_asn / measurements.total_nodes)
+        ) ** 2
+
+        total_score = (performance_score * version_score) ** (1 / 2)
+
+        result.append(
+            CrnScore(
+                node_id=node_id,
+                total_score=total_score,
+                performance=performance_score,
+                version=version_score,
+                decentralization=decentralization_score,
+                measurements=measurements,
+            )
+        )
+
+    await conn.close()
+
+    logger.info(
+        "{} CRN nodes with a total score greater than zero".format(
+            len([x for x in result if x.total_score > 0])
+        )
+    )
+    return result
+
+
+async def query_ccn_asn_info(
+    conn: asyncpg.connection, period: Period
+) -> Dict[str, Dict]:
+    """ASN metrics is queried independently of the other metrics
+    as to avoid issues related to the group by node_id.
+    """
+    sql = read_sql_file("query_node_asn_info.template.sql")
+
+    allowed_sender = settings.ALLOWED_METRICS_SENDER
+    post_type = settings.ALEPH_POST_TYPE_METRICS
+
+    values = await conn.fetch(
+        sql,
+        allowed_sender,
+        period.from_date,
+        period.to_date,
+        "ccn",
+        post_type,
+    )
+
+    result: Dict[str, Dict] = {}
+    for row in values:
+        if row["node_id"] in result and result[row["node_id"]]["asn"]:
+            # Do not update results that contain an ASN,
+            # focus on those where it is missing
+            continue
+
+        result[row["node_id"]] = {
+            "asn": row["asn"],
+            "total_nodes": row["total_nodes"],
+            "nodes_with_identical_asn": row["nodes_with_identical_asn"],
+        }
+    return result
+
+
+async def query_ccn_measurements(
+    conn: asyncpg.connection,
+    asn_info: Dict,
+    period: Period,
+):
+    sql = read_sql_file("query_ccn_measurements.template.sql")
+
+    values = await conn.fetch(
+        sql,
+        settings.ALLOWED_METRICS_SENDER,
+        settings.ALEPH_POST_TYPE_METRICS,
+        period.from_date,
+        period.to_date,
+    )
+
+    for record in values:
+        row = dict(record)
+        row.update(asn_info[record["node_id"]])
+        yield record["node_id"], CcnMeasurements.parse_obj(row)
+
+
+async def compute_ccn_scores(
+    period: Period,
+) -> List[CcnScore]:
+    conn = await database_connection(settings)
+
+    asn_info: Dict[str, Dict] = await query_ccn_asn_info(conn, period=period)
+
+    result = []
+    async for node_id, measurements in query_ccn_measurements(
+        conn,
+        asn_info,
+        period,
+    ):
+        # This contains custom logic on the scores
+        performance_score = (
+            measurements.base_latency_score_p25
+            * measurements.base_latency_score_p95
+            * measurements.metrics_latency_score_p25
+            # Suspend using diagnostic_vm_latency_score_p95 since most nodes
+            # have very bad values
+            * measurements.metrics_latency_score_p95
+            * measurements.aggregate_latency_score_p25
+            # Suspend using full_check_latency_score_p95 since most nodes
+            # have very bad values
+            * measurements.aggregate_latency_score_p95
+            # * measurements.file_download_latency_score_p25
+            # * measurements.file_download_latency_score_p95
+            # * measurements.eth_height_remaining_score_p25
+            # * measurements.eth_height_remaining_score_p95
+        ) ** (1 / 6)
+
+        if not sum(
+            (
+                measurements.node_version_missing,
+                measurements.node_version_latest,
+                measurements.node_version_outdated,
+                measurements.node_version_obsolete,
+                measurements.node_version_other,
+                measurements.node_version_prerelease,
+            )
+        ):
+            logger.warning(f"No version measurement for node {node_id}")
+            version_score = 0
+        elif (
+            measurements.node_version_missing
+            > (
+                measurements.node_version_latest
+                + measurements.node_version_outdated
+                + measurements.node_version_obsolete
+                + measurements.node_version_other
+                + measurements.node_version_prerelease
+            )
+            / 5
+        ):
+            logger.debug(f"Too many missing version metrics for CRN node {node_id}")
+            version_score = 0
+        else:
+            version_score = (
+                measurements.node_version_latest
+                + measurements.node_version_outdated
+                + measurements.node_version_prerelease
+            ) / (
+                measurements.node_version_latest
+                + measurements.node_version_outdated
+                + measurements.node_version_obsolete
+                + measurements.node_version_missing
+                + measurements.node_version_other
+                + measurements.node_version_prerelease
+            )
+
+        decentralization_score = (
+            1 - (measurements.nodes_with_identical_asn / measurements.total_nodes)
+        ) ** 2
+
+        total_score = (performance_score * version_score) ** (1 / 2)
+
+        result.append(
+            CcnScore(
+                node_id=node_id,
+                total_score=total_score,
+                performance=performance_score,
+                version=version_score,
+                decentralization=decentralization_score,
+                measurements=measurements,
+            )
+        )
+
+    await conn.close()
+
+    logger.info(
+        "{} CCN nodes with a total score greater than zero".format(
+            len([x for x in result if x.total_score > 0])
+        )
+    )
+    return result
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+
+    to_date = datetime.utcnow()
+    from_date = to_date - settings.SCORE_METRICS_PERIOD
+    current_period = Period(from_date=from_date, to_date=to_date)
+
+    (
+        latest_ccn_release,
+        previous_ccn_release,
+        latest_ccn_prerelease,
+    ) = get_latest_github_releases("aleph-im", "pyaleph")
+    (
+        latest_crn_release,
+        previous_crn_release,
+        latest_crn_prerelease,
+    ) = get_latest_github_releases("aleph-im", "aleph-vm")
+
+    ccn_scores = asyncio.run(
+        compute_ccn_scores(
+            period=current_period,
+        )
+    )
+    crn_scores = asyncio.run(
+        compute_crn_scores(
+            period=current_period,
+        )
+    )
+
+    scores = NodeScores(
+        ccn=ccn_scores,
+        crn=crn_scores,
+    )
+    with open(Path(__file__).parent.parent.parent / "scores.json", "w") as fd:
+        fd.write(scores.json(indent=4))

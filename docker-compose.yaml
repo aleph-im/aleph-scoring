@@ -3,7 +3,7 @@ services:
   aleph-scoring:
     build: .
     image: aleph-scoring:latest
-    command: "run-on-schedule --format json"
+    command: "measure-on-schedule --publish"
     environment:
       SENTRY_DSN: ""
     volumes:
