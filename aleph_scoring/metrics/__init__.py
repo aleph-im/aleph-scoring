@@ -24,7 +24,7 @@ from typing import (
     NewType,
 )
 from urllib.parse import urlparse
-
+from icmplib import async_ping
 import aiohttp
 import async_timeout
 import pyasn
@@ -232,17 +232,18 @@ def get_executable_ipv6(
     return IPv6Address(":".join(ipv6_elems))
 
 
-def ping(ip_address: Union[IPv4Address, IPv6Address]) -> bool:
-    try:
-        result = subprocess.run(["ping", "-c", "1", str(ip_address)], timeout=2)
-    except subprocess.TimeoutExpired:
-        logger.debug("Ping %s timed out", str(ip_address))
-        return False
+async def ping(
+    ip_address: Union[IPv4Address, IPv6Address], count: int
+) -> Optional[float]:
+    result = await async_ping(
+        address=str(ip_address), count=count, timeout=2, privileged=False
+    )
+    if result.is_alive:
+        return result.avg_rtt
+    return None
 
-    return result.returncode == 0
 
-
-def ping_vm(crn_url: str, vm_hash: str) -> bool:
+async def ping_vm(crn_url: str, vm_hash: str) -> Optional[float]:
     crn_ipv6 = get_ipv6(crn_url)
     if not crn_ipv6:
         return False
@@ -252,11 +253,15 @@ def ping_vm(crn_url: str, vm_hash: str) -> bool:
         crn_ipv6_range=crn_ipv6_range, vm_type=VmType.microvm, item_hash=vm_hash
     )
 
-    vm_is_pingable = ping(vm_ipv6)
-    if vm_is_pingable:
-        logger.debug("VM %s is reachable over IPv6", vm_ipv6)
+    average_response_time = await ping(vm_ipv6, count=1)
+    if average_response_time:
+        logger.debug(
+            "VM %s is reachable over IPv6, pinged in %.2f seconds",
+            vm_ipv6,
+            average_response_time,
+        )
 
-    return vm_is_pingable
+    return average_response_time
 
 
 def lookup_asn(
@@ -447,12 +452,12 @@ async def get_crn_metrics(
         )[0]
 
         if diagnostic_vm_latency is not None:
-            vms_have_ipv6 = ping_vm(
+            vm_ping_response_time = ping_vm(
                 crn_url=node_info.url.url, vm_hash=CRN_DIAGNOSTIC_VM_HASH
             )
         else:
-            logger.debug("Could not start diagnostic VM, skipping IPv6 check")
-            vms_have_ipv6 = False
+            logger.debug("Could not start diagnostic VM, skipping IPv6 ping check")
+            vm_ping_response_time = None
 
         full_check_latency = (
             await measure_http_latency(
@@ -494,7 +499,7 @@ async def get_crn_metrics(
         base_latency_ipv4=base_latency_ipv4,
         diagnostic_vm_latency=diagnostic_vm_latency,
         full_check_latency=full_check_latency,
-        vms_have_ipv6=vms_have_ipv6,
+        vm_ping_response_time=vm_ping_response_time,
     )
 
 

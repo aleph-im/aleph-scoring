@@ -27,7 +27,7 @@ class CcnMetrics(AlephNodeMetrics):
 class CrnMetrics(AlephNodeMetrics):
     diagnostic_vm_latency: Optional[float]
     full_check_latency: Optional[float]
-    vms_have_ipv6: bool = False
+    vm_ping_response_time: Optional[float] = None
 
 
 class NodeMetrics(BaseModel):
