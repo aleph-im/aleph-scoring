@@ -248,7 +248,7 @@ async def ping(
 async def ping_vm(crn_url: str, vm_hash: str) -> Optional[float]:
     crn_ipv6 = get_ipv6(crn_url)
     if not crn_ipv6:
-        return False
+        return None
 
     crn_ipv6_range = IPv6Network(crn_ipv6, strict=False)
     vm_ipv6 = get_executable_ipv6(
@@ -454,12 +454,12 @@ async def get_crn_metrics(
         )[0]
 
         if diagnostic_vm_latency is not None:
-            vm_ping_response_time = await ping_vm(
+            vm_ping_latency = await ping_vm(
                 crn_url=node_info.url.url, vm_hash=CRN_DIAGNOSTIC_VM_HASH
             )
         else:
             logger.debug("Could not start diagnostic VM, skipping IPv6 ping check")
-            vm_ping_response_time = None
+            vm_ping_latency = None
 
         full_check_latency = (
             await measure_http_latency(
@@ -501,7 +501,7 @@ async def get_crn_metrics(
         base_latency_ipv4=base_latency_ipv4,
         diagnostic_vm_latency=diagnostic_vm_latency,
         full_check_latency=full_check_latency,
-        vm_ping_response_time=vm_ping_response_time,
+        vm_ping_latency=vm_ping_latency,
     )
 
 
