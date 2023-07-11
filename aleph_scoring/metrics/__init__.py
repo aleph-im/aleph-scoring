@@ -2,8 +2,10 @@ import asyncio
 import logging
 import re
 import socket
+import subprocess
 import time
 from datetime import datetime
+from ipaddress import IPv6Network, IPv6Address, IPv4Address
 from random import shuffle, random
 from typing import (
     Any,
@@ -22,7 +24,7 @@ from typing import (
     NewType,
 )
 from urllib.parse import urlparse
-
+from icmplib import async_ping
 import aiohttp
 import async_timeout
 import pyasn
@@ -32,8 +34,7 @@ from urllib3.util import Url, parse_url
 
 from aleph_scoring.config import settings
 from aleph_scoring.metrics.asn import get_asn_database
-
-from ..utils import get_github_release
+from aleph_scoring.types.vm_type import VmType
 from .models import AlephNodeMetrics, CcnMetrics, CrnMetrics, NodeMetrics
 
 logger = logging.getLogger(__name__)
@@ -51,9 +52,11 @@ CCN_FILE_DOWNLOAD_PATH = (
     "50645d4ccfddb7540e7bb17ffa5609ec8a980e588e233f0e2c4451f6f9da6ebd"
 )
 
-CRN_DIAGNOSTIC_VM_PATH = (
-    "{url}vm/67705389842a0a1b95eaa408b009741027964edc805997475e95c505d642edd8",
+CRN_DIAGNOSTIC_VM_HASH = (
+    "67705389842a0a1b95eaa408b009741027964edc805997475e95c505d642edd8"
 )
+
+CRN_DIAGNOSTIC_VM_PATH = "{url}vm/" + CRN_DIAGNOSTIC_VM_HASH
 IP4_SERVICE_URL = "https://v4.ident.me/"
 
 
@@ -205,6 +208,62 @@ def get_ipv4(url: str) -> Optional[str]:
         return socket.gethostbyname(domain)
     except socket.gaierror:
         return None
+
+
+def get_ipv6(url: str) -> Optional[str]:
+    domain = get_url_domain(url)
+    try:
+        addrinfo = socket.getaddrinfo(domain, None, socket.AF_INET6)
+        return addrinfo[0][4][0]
+    except socket.gaierror:
+        return None
+
+
+def get_executable_ipv6(
+    crn_ipv6_range: IPv6Network, vm_type: VmType, item_hash: str
+) -> IPv6Address:
+    ipv6_elems = crn_ipv6_range.exploded.split(":")[:4]
+    ipv6_elems += [str(vm_type.value)]
+
+    # Add the item hash of the VM as the last 44 bits of the IPv6 address.
+    # We expect the VM interface to be set up to use the "1" address of the /124 subnet.
+    ipv6_elems += [item_hash[0:4], item_hash[4:8], item_hash[8:11] + "1"]
+
+    return IPv6Address(":".join(ipv6_elems))
+
+
+async def ping(
+    ip_address: Union[IPv4Address, IPv6Address], count: int
+) -> Optional[float]:
+    result = await async_ping(
+        address=str(ip_address), count=count, timeout=2, privileged=False
+    )
+    if result.is_alive:
+        return result.avg_rtt
+
+    logger.debug("Ping %s timed out", str(ip_address))
+    return None
+
+
+async def ping_vm(crn_url: str, vm_hash: str) -> Optional[float]:
+    crn_ipv6 = get_ipv6(crn_url)
+    if not crn_ipv6:
+        return None
+
+    crn_ipv6_range = IPv6Network(crn_ipv6, strict=False)
+    vm_ipv6 = get_executable_ipv6(
+        crn_ipv6_range=crn_ipv6_range, vm_type=VmType.microvm, item_hash=vm_hash
+    )
+
+    average_response_time = await ping(vm_ipv6, count=1)
+    if average_response_time:
+        logger.debug(
+            "VM %s is reachable over IPv6, pinged in %.2f seconds",
+            vm_ipv6,
+            average_response_time,
+        )
+
+    return average_response_time
 
 
 def lookup_asn(
@@ -393,6 +452,15 @@ async def get_crn_metrics(
                 timeout_seconds=10,
             )
         )[0]
+
+        if diagnostic_vm_latency is not None:
+            vm_ping_latency = await ping_vm(
+                crn_url=node_info.url.url, vm_hash=CRN_DIAGNOSTIC_VM_HASH
+            )
+        else:
+            logger.debug("Could not start diagnostic VM, skipping IPv6 ping check")
+            vm_ping_latency = None
+
         full_check_latency = (
             await measure_http_latency(
                 session,
@@ -433,6 +501,7 @@ async def get_crn_metrics(
         base_latency_ipv4=base_latency_ipv4,
         diagnostic_vm_latency=diagnostic_vm_latency,
         full_check_latency=full_check_latency,
+        vm_ping_latency=vm_ping_latency,
     )
 
 
