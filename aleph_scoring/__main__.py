@@ -223,6 +223,7 @@ def compute_scores(
     from_date = to_date - settings.SCORE_METRICS_PERIOD
     current_period = Period(from_date=from_date, to_date=to_date)
 
+    logger.info(f"Period = {current_period.from_date.isoformat()} to {current_period.to_date.isoformat()}")
     # (
     #     latest_ccn_release,
     #     previous_ccn_release,
