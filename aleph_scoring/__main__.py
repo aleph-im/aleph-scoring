@@ -3,7 +3,7 @@ import json
 import logging
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -93,6 +93,7 @@ async def publish_scores_on_aleph(
         tags=["mainnet"],
         scores=node_scores,
         period=period,
+        measured_at=datetime.now(tz=timezone.utc).isoformat(),
     )
 
     post_content = scores_post_data.dict()
