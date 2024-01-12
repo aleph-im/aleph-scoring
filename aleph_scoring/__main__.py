@@ -11,7 +11,7 @@ import schedule
 import sentry_sdk
 import typer
 from aleph.sdk.chains.ethereum import ETHAccount
-from aleph.sdk.client import AuthenticatedAlephClient
+from aleph.sdk.client import AuthenticatedAlephHttpClient
 from aleph.sdk.types import Account
 from hexbytes import HexBytes
 
@@ -49,7 +49,7 @@ async def publish_metrics_on_aleph(account: Account, node_metrics: NodeMetrics):
     aleph_api_server = settings.NODE_DATA_HOST
 
     metrics_post_data = MetricsPost(tags=["mainnet"], metrics=node_metrics)
-    async with AuthenticatedAlephClient(
+    async with AuthenticatedAlephHttpClient(
         account=account, api_server=aleph_api_server
     ) as client:
         metrics_post, status = await client.create_post(
@@ -78,7 +78,7 @@ async def publish_scores_on_aleph(
     # Force datetime conversion to string
     post_content["period"] = json.loads(period.json())
 
-    async with AuthenticatedAlephClient(
+    async with AuthenticatedAlephHttpClient(
         account=account, api_server=aleph_api_server
     ) as client:
         scores_post, status = await client.create_post(
