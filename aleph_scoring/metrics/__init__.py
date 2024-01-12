@@ -56,7 +56,12 @@ CRN_DIAGNOSTIC_VM_HASH = (
     "67705389842a0a1b95eaa408b009741027964edc805997475e95c505d642edd8"
 )
 
+VRF_VM_HASH = (
+    "f6a734dbc98659f030e1cd9c12d8ffb769deac55d42d5db5285fba099755c779"
+)
+
 CRN_DIAGNOSTIC_VM_PATH = "{url}vm/" + CRN_DIAGNOSTIC_VM_HASH
+VRF_VM_PATH = "{url}vm/" + VRF_VM_HASH
 IP4_SERVICE_URL = "https://v4.ident.me/"
 
 
@@ -469,6 +474,14 @@ async def get_crn_metrics(
             )
         )[0]
 
+        vrf_vm_latency = (
+            await measure_http_latency(
+                session,
+                "".join(VRF_VM_PATH).format(url=url),
+                timeout_seconds=10,
+            )
+        )[0]
+
     async with aiohttp.ClientSession(
         timeout=timeout_generator(),
         connector=aiohttp.TCPConnector(
@@ -502,6 +515,7 @@ async def get_crn_metrics(
         diagnostic_vm_latency=diagnostic_vm_latency,
         full_check_latency=full_check_latency,
         vm_ping_latency=vm_ping_latency,
+        vrf_latency=vrf_vm_latency,
     )
 
 
