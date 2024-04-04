@@ -2,39 +2,43 @@ import asyncio
 import logging
 import re
 import socket
-import subprocess
 import time
 from datetime import datetime
-from ipaddress import IPv6Network, IPv6Address, IPv4Address
-from random import shuffle, random
+from ipaddress import IPv4Address, IPv6Address, IPv6Network
+from random import random, shuffle
 from typing import (
     Any,
     Awaitable,
     Callable,
     Dict,
-    Generator,
     Iterable,
-    List,
     Literal,
     Optional,
     Sequence,
     Tuple,
     TypeVar,
     Union,
-    NewType,
 )
 from urllib.parse import urlparse
-from icmplib import async_ping
+
 import aiohttp
 import async_timeout
 import pyasn
-from aleph.sdk import AlephClient
-from pydantic import BaseModel, validator
-from urllib3.util import Url, parse_url
-
 from aleph_scoring.config import settings
 from aleph_scoring.metrics.asn import get_asn_database
 from aleph_scoring.types.vm_type import VmType
+from aleph_scoring.utils import (
+    NodeInfo,
+    TimeoutGenerator,
+    get_aleph_nodes,
+    get_api_node_urls,
+    get_compute_resource_node_urls,
+    get_crn_version,
+    timeout_generator,
+)
+from icmplib import async_ping
+from pydantic import BaseModel
+
 from .models import AlephNodeMetrics, CcnMetrics, CrnMetrics, NodeMetrics
 
 logger = logging.getLogger(__name__)
@@ -59,69 +63,6 @@ CRN_DIAGNOSTIC_VM_HASH = (
 CRN_DIAGNOSTIC_VM_PATH = "{url}vm/" + CRN_DIAGNOSTIC_VM_HASH
 IP4_SERVICE_URL = "https://v4.ident.me/"
 
-
-TimeoutGenerator = NewType("TimeoutGenerator", Callable[[], aiohttp.ClientTimeout])
-
-
-def timeout_generator(
-    total: float, connect: float, sock_connect: float, sock_read: float
-) -> TimeoutGenerator:
-    def randomize(value: float) -> float:
-        return value + value * 0.3 * random()
-
-    return lambda: aiohttp.ClientTimeout(
-        total=randomize(total),
-        connect=randomize(connect),
-        sock_connect=randomize(sock_connect),
-        sock_read=randomize(sock_read),
-    )
-
-
-class NodeInfo(BaseModel):
-    url: Url
-    hash: str
-
-    @validator("hash")
-    def hash_format(cls, v) -> str:
-        if len(v) != 64:
-            raise ValueError("must have a length of 64")
-        try:
-            # Parse as hexadecimal using int()
-            int(v, 16)
-        except ValueError:
-            raise ValueError("must be hexadecimal")
-        return v
-
-
-def get_api_node_urls(raw_data: Dict[str, Any]) -> Generator[NodeInfo, None, None]:
-    """Extract CCN urls from node data."""
-    for node in raw_data["nodes"]:
-        multiaddress = node["multiaddress"]
-        match = re.findall(r"/ip4/([\d\\.]+)/.*", multiaddress)
-        if match:
-            ip = match[0]
-            yield NodeInfo(
-                url=parse_url(f"http://{ip}:4024/"),
-                hash=node["hash"],
-            )
-
-
-def get_compute_resource_node_urls(
-    raw_data: Dict[str, Any]
-) -> Generator[NodeInfo, None, None]:
-    """Extract CRN node urls the node data."""
-    for node in raw_data["resource_nodes"]:
-        addr = node["address"].strip("/")
-        if addr:
-            if not addr.startswith("https://"):
-                addr = "https://" + addr
-            url: Url = parse_url(addr + "/")
-            if url.query:
-                logger.warning("Unsupported url for node %s", node["hash"])
-            yield NodeInfo(
-                url=url,
-                hash=node["hash"],
-            )
 
 
 async def measure_http_latency(
@@ -167,34 +108,6 @@ async def measure_http_latency(
     except asyncio.TimeoutError:
         logger.debug(f"Timeout error when fetching {url}")
         return None, None
-
-
-async def get_crn_version(
-    session: aiohttp.ClientSession, node_url: str
-) -> Optional[str]:
-    # Retrieve the CRN version from header `server`.
-    try:
-        async with async_timeout.timeout(
-            settings.HTTP_REQUEST_TIMEOUT
-            + settings.HTTP_REQUEST_TIMEOUT * 0.3 * random(),
-        ):
-            async with session.get(node_url) as resp:
-                resp.raise_for_status()
-                if "Server" not in resp.headers:
-                    return None
-                for server in resp.headers.getall("Server"):
-                    version: List[str] = re.findall(r"^aleph-vm/(.*)$", server)
-                    if version and version[0]:
-                        return version[0]
-                else:
-                    return None
-
-    except (aiohttp.ClientResponseError, aiohttp.ClientConnectorError):
-        logger.debug(f"Error when fetching version from {node_url}")
-        return None
-    except asyncio.TimeoutError:
-        logger.debug(f"Timeout error when fetching version from  {node_url}")
-        return None
 
 
 def get_url_domain(url: str) -> str:
@@ -535,15 +448,6 @@ async def collect_all_crn_metrics(node_data: Dict[str, Any]) -> Sequence[CrnMetr
     return await collect_node_metrics(
         node_infos=node_infos, metrics_function=get_crn_metrics
     )
-
-
-async def get_aleph_nodes() -> Dict:
-    async with AlephClient(api_server=settings.NODE_DATA_HOST) as client:
-        return await client.fetch_aggregate(
-            address=settings.NODE_DATA_ADDR,
-            key="corechannel",
-            limit=50,
-        )
 
 
 async def collect_server_metadata(asn_db: pyasn.pyasn) -> Tuple[str, int, str]:

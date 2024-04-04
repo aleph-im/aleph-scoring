@@ -15,12 +15,14 @@ from aleph.sdk.client import AuthenticatedAlephClient
 from aleph.sdk.types import Account
 from hexbytes import HexBytes
 
+from aleph_scoring.benchmarks import benchmark_node_performance_sync
+from aleph_scoring.benchmarks.models import BenchmarksPost, NodeBenchmarks
 from aleph_scoring.config import settings
 from aleph_scoring.metrics import measure_node_performance_sync
 from aleph_scoring.metrics.models import MetricsPost, NodeMetrics
 from aleph_scoring.scoring import compute_ccn_scores, compute_crn_scores
 from aleph_scoring.scoring.models import NodeScores, NodeScoresPost
-from aleph_scoring.utils import LogLevel, Period, get_latest_github_releases
+from aleph_scoring.utils import LogLevel, Period
 
 logger = logging.getLogger(__name__)
 aleph_account: Optional[ETHAccount] = None
@@ -90,6 +92,23 @@ async def publish_scores_on_aleph(
         "Published scores on Aleph with status %s: %s", status, scores_post.item_hash
     )
 
+async def publish_benchmarks_on_aleph(account: Account, node_benchmarks: NodeBenchmarks):
+    channel = settings.ALEPH_POST_TYPE_CHANNEL
+    aleph_api_server = settings.NODE_DATA_HOST
+
+    benchmarks_post_data = BenchmarksPost(tags=["devnet"], benchmarks=node_benchmarks)
+    async with AuthenticatedAlephClient(
+        account=account, api_server=aleph_api_server
+    ) as client:
+        metrics_post, status = await client.create_post(
+            post_content=benchmarks_post_data,
+            post_type=settings.ALEPH_POST_TYPE_BENCHMARKS,
+            channel=channel,
+        )
+    logger.info(
+        "Published benchmarks on Aleph with status %s: %s", status, metrics_post.item_hash
+    )
+
 
 def run_measurements(
     output: Optional[Path] = typer.Option(
@@ -112,6 +131,30 @@ def run_measurements(
         asyncio.run(
             publish_metrics_on_aleph(account=account, node_metrics=node_metrics)
         )
+
+
+def run_benchmarks(
+    output: Optional[Path] = typer.Option(
+        default=None, help="Path where to save the result in JSON format."
+    ),
+    stdout: bool = typer.Option(default=False, help="Print the result on stdout"),
+    publish: bool = typer.Option(
+        default=False,
+        help="Publish the results on Aleph.",
+    ),
+):
+    node_benchmarks = benchmark_node_performance_sync()
+
+    if output:
+        save_as_json(node_metrics=node_benchmarks, file=output)
+    if stdout:
+        print(node_benchmarks.json(indent=4))
+    if publish:
+        account = get_aleph_account()
+        asyncio.run(
+            publish_benchmarks_on_aleph(account=account, node_benchmarks=node_benchmarks)
+        )
+
 
 
 @app.command()
@@ -295,6 +338,23 @@ def compute_on_schedule(
 @app.command()
 def export_as_html(input_file: Optional[Path]):
     os.system("jupyter nbconvert --execute Node\\ Score\\ Analysis.ipynb --to html")
+
+@app.command()
+def benchmark(
+    output: Optional[Path] = typer.Option(
+        default=None, help="Path where to save the result in JSON format."
+    ),
+    publish: bool = typer.Option(
+        default=False,
+        help="Publish the results on Aleph.",
+    ),
+    log_level: str = typer.Option(
+        default=LogLevel.INFO.name,
+        help="Logging level",
+    ),
+):
+    logging.basicConfig(level=LogLevel[log_level])
+    run_benchmarks(output=output, publish=publish)
 
 
 def main():
