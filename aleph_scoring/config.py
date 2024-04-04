@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     ALEPH_POST_TYPE_CHANNEL: Optional[str] = "aleph-scoring"
     ALEPH_POST_TYPE_METRICS: str = "test-aleph-network-metrics"
     ALEPH_POST_TYPE_SCORES: str = "test-aleph-scoring-scores"
+    ALEPH_POST_TYPE_BENCHMARKS: str = "test-aleph-scoring-benchmarks"
     ASN_DB_DIRECTORY: Path = "/srv/asn"
     ASN_DB_PATH: str = "/tmp/asn_db.bz2"
     ASN_DB_REFRESH_PERIOD_DAYS: int = 1
@@ -35,6 +36,8 @@ class Settings(BaseSettings):
 
     VERSION_GRACE_PERIOD: timedelta = timedelta(weeks=2)
     SCORE_METRICS_PERIOD: timedelta = timedelta(days=1)  # TODO: bring back to 2 weeks
+
+    BENCHMARK_VM_HASH: str = "80b48e93995b3f31ee624c085cc6fa4cee4ced0174ff33e95b32e5992d68f755"
 
     class Config:
         env_file = ".env"
