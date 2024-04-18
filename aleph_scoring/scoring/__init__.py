@@ -52,6 +52,8 @@ async def query_crn_asn_info(
         settings.ALEPH_POST_TYPE_METRICS,
     )
 
+    # TODO: Handle ASN switch of a node
+
     result: Dict[str, Dict] = {}
     for row in values:
         if row["node_id"] in result and result[row["node_id"]]["asn"]:
