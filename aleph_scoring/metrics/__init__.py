@@ -4,8 +4,8 @@ import re
 import socket
 import subprocess
 import time
-from datetime import datetime
 from ipaddress import IPv6Network, IPv6Address, IPv4Address
+from datetime import datetime, timezone
 from random import shuffle, random
 from typing import (
     Any,
@@ -309,7 +309,7 @@ async def get_ccn_metrics(
     await asyncio.sleep(random() * 30)
 
     url = node_info.url.url
-    measured_at = datetime.utcnow()
+    measured_at = datetime.now(tz=timezone.utc)
 
     asn, as_name = lookup_asn(asn_db, url)
 
