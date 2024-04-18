@@ -19,10 +19,9 @@ class Settings(BaseSettings):
     DATABASE_PORT = 5432
 
     ALEPH_POST_TYPE_CHANNEL: Optional[str] = "aleph-scoring"
-    ALEPH_POST_TYPE_METRICS: str = "test-aleph-network-metrics"
-    ALEPH_POST_TYPE_SCORES: str = "test-aleph-scoring-scores"
-    ASN_DB_DIRECTORY: Path = "/srv/asn"
-    ASN_DB_PATH: str = "/tmp/asn_db.bz2"
+    ALEPH_POST_TYPE_METRICS: str = "aleph-network-metrics"
+    ALEPH_POST_TYPE_SCORES: str = "aleph-scoring-scores"
+    ASN_DB_DIRECTORY: Path = Path(__file__).parent.parent / "asn"
     ASN_DB_REFRESH_PERIOD_DAYS: int = 1
     DAEMON_MODE_PERIOD_HOURS: int = 24
     EXPORT_DATAFRAME: bool = False
