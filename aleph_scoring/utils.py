@@ -1,7 +1,7 @@
 from datetime import datetime
 from enum import Enum
 from functools import partial
-from typing import Optional, Tuple, List
+from typing import List, Optional, Tuple
 
 import asyncpg
 import requests

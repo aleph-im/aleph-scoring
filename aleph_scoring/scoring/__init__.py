@@ -14,11 +14,7 @@ from aleph_scoring.scoring.models import (
     CrnScore,
     NodeScores,
 )
-from aleph_scoring.utils import (
-    Period,
-    database_connection,
-    get_latest_github_releases,
-)
+from aleph_scoring.utils import Period, database_connection, get_latest_github_releases
 
 logger = logging.getLogger(__name__)
 
