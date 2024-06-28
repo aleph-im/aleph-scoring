@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class AlephNodeMetrics(BaseModel):
@@ -28,6 +28,9 @@ class CrnMetrics(AlephNodeMetrics):
     diagnostic_vm_latency: Optional[float]
     full_check_latency: Optional[float]
     diagnostic_vm_ping_latency: Optional[float] = None
+    features: List[str] = Field(
+        default_factory=list, description="List of features supported by the node"
+    )
 
 
 class NodeMetrics(BaseModel):

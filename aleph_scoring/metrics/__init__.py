@@ -29,15 +29,20 @@ import async_timeout
 import pyasn
 from aleph.sdk.client.http import AlephHttpClient
 from aleph_message.models import ItemHash
+from aleph_message.models.execution.environment import CpuProperties
 from icmplib import async_ping
 from pydantic import BaseModel, validator
 from urllib3.util import Url, parse_url
 
 from aleph_scoring.config import settings
 from aleph_scoring.metrics.asn import get_asn_database
+from aleph_scoring.metrics.models import (
+    AlephNodeMetrics,
+    CcnMetrics,
+    CrnMetrics,
+    NodeMetrics,
+)
 from aleph_scoring.types.vm_type import VmType
-
-from aleph_scoring.metrics.models import AlephNodeMetrics, CcnMetrics, CrnMetrics, NodeMetrics
 
 logger = logging.getLogger(__name__)
 
@@ -413,6 +418,30 @@ async def get_ccn_metrics(
     )
 
 
+async def fetch_supported_features(
+    session: aiohttp.ClientSession, node_url: str, timeout_seconds: int
+) -> Optional[List[str]]:
+    """Fetch the list of features supported by a node."""
+    url = f"{node_url}about/usage/system"
+    try:
+        async with async_timeout.timeout(
+            timeout_seconds + timeout_seconds * 0.3 * random()
+        ):
+            async with session.get(url) as resp:
+                resp.raise_for_status()
+                system_info_raw = await resp.json()
+                return system_info_raw["properties"]["cpu"].get("features", None)
+    except KeyError as e:
+        logger.debug(f"Invalid response when fetching features from {url}: {e}")
+        return None
+    except (aiohttp.ClientResponseError, aiohttp.ClientConnectorError) as e:
+        logger.debug(f"Error when fetching features from {url}: {e}")
+        return None
+    except TimeoutError as e:
+        logger.debug(f"Timeout error when fetching features from {url}: {e}")
+        return None
+
+
 async def get_crn_metrics(
     timeout_generator: TimeoutGenerator, asn_db: pyasn.pyasn, node_info: NodeInfo
 ) -> CrnMetrics:
@@ -461,7 +490,8 @@ async def get_crn_metrics(
 
         if diagnostic_vm_latency is not None:
             diagnostic_vm_ping_latency = await ping_vm(
-                crn_url=node_info.url.url, vm_hash=ItemHash(settings.DIAGNOSTIC_VM_ITEM_HASH)
+                crn_url=node_info.url.url,
+                vm_hash=ItemHash(settings.DIAGNOSTIC_VM_ITEM_HASH),
             )
         else:
             logger.debug("Could not start diagnostic VM, skipping IPv6 ping check")
@@ -474,6 +504,10 @@ async def get_crn_metrics(
                 timeout_seconds=20,
             )
         )[0]
+
+        features_supported = await fetch_supported_features(
+            session, url, timeout_seconds=5
+        )
 
     async with aiohttp.ClientSession(
         timeout=timeout_generator(),
@@ -508,6 +542,7 @@ async def get_crn_metrics(
         diagnostic_vm_latency=diagnostic_vm_latency,
         full_check_latency=full_check_latency,
         diagnostic_vm_ping_latency=diagnostic_vm_ping_latency,
+        features=features_supported,
     )
 
 
