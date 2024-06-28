@@ -20,7 +20,7 @@ from aleph_scoring.metrics import measure_node_performance_sync
 from aleph_scoring.metrics.models import MetricsPost, NodeMetrics
 from aleph_scoring.scoring import compute_ccn_scores, compute_crn_scores
 from aleph_scoring.scoring.models import NodeScores, NodeScoresPost
-from aleph_scoring.utils import LogLevel, Period, get_latest_github_releases
+from aleph_scoring.utils import LogLevel, Period
 
 logger = logging.getLogger(__name__)
 aleph_account: Optional[ETHAccount] = None
@@ -223,7 +223,9 @@ def compute_scores(
     from_date = to_date - settings.SCORE_METRICS_PERIOD
     current_period = Period(from_date=from_date, to_date=to_date)
 
-    logger.info(f"Period = {current_period.from_date.isoformat()} to {current_period.to_date.isoformat()}")
+    logger.info(
+        f"Period = {current_period.from_date.isoformat()} to {current_period.to_date.isoformat()}"
+    )
     # (
     #     latest_ccn_release,
     #     previous_ccn_release,

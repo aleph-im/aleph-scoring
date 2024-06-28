@@ -1,6 +1,7 @@
 """
 Utils to download and maintain the ASN database.
 """
+
 import datetime as dt
 import json
 import logging
@@ -92,11 +93,13 @@ def find_latest_routeviews(
     assert archive_ipv in ("4", "6", "46", "64")
     return find_latest_in_ftp(
         server=Server("archive.routeviews.org"),
-        archive_root="bgpdata"
-        if archive_ipv == "4"
-        else "route-views6/bgpdata"
-        if archive_ipv == "6"
-        else "route-views4/bgpdata",  # 4+6
+        archive_root=(
+            "bgpdata"
+            if archive_ipv == "4"
+            else (
+                "route-views6/bgpdata" if archive_ipv == "6" else "route-views4/bgpdata"
+            )
+        ),  # 4+6
         sub_dir="RIBS",
     )
 

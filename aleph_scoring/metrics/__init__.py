@@ -2,11 +2,10 @@ import asyncio
 import logging
 import re
 import socket
-import subprocess
 import time
-from ipaddress import IPv6Network, IPv6Address, IPv4Address
 from datetime import datetime, timezone
-from random import shuffle, random
+from ipaddress import IPv4Address, IPv6Address, IPv6Network
+from random import random, shuffle
 from typing import (
     Any,
     Awaitable,
@@ -16,25 +15,28 @@ from typing import (
     Iterable,
     List,
     Literal,
+    NewType,
     Optional,
     Sequence,
     Tuple,
     TypeVar,
     Union,
-    NewType,
 )
 from urllib.parse import urlparse
-from icmplib import async_ping
+
 import aiohttp
 import async_timeout
 import pyasn
 from aleph.sdk import AlephClient
+from aleph_message.models import ItemHash
+from icmplib import async_ping
 from pydantic import BaseModel, validator
 from urllib3.util import Url, parse_url
 
 from aleph_scoring.config import settings
 from aleph_scoring.metrics.asn import get_asn_database
 from aleph_scoring.types.vm_type import VmType
+
 from .models import AlephNodeMetrics, CcnMetrics, CrnMetrics, NodeMetrics
 
 logger = logging.getLogger(__name__)
@@ -220,7 +222,7 @@ def get_ipv6(url: str) -> Optional[str]:
 
 
 def get_executable_ipv6(
-    crn_ipv6_range: IPv6Network, vm_type: VmType, item_hash: str
+    crn_ipv6_range: IPv6Network, vm_type: VmType, item_hash: ItemHash
 ) -> IPv6Address:
     ipv6_elems = crn_ipv6_range.exploded.split(":")[:4]
     ipv6_elems += [str(vm_type.value)]
@@ -245,7 +247,7 @@ async def ping(
     return None
 
 
-async def ping_vm(crn_url: str, vm_hash: str) -> Optional[float]:
+async def ping_vm(crn_url: str, vm_hash: ItemHash) -> Optional[float]:
     crn_ipv6 = get_ipv6(crn_url)
     if not crn_ipv6:
         return None
@@ -455,7 +457,7 @@ async def get_crn_metrics(
 
         if diagnostic_vm_latency is not None:
             vm_ping_latency = await ping_vm(
-                crn_url=node_info.url.url, vm_hash=CRN_DIAGNOSTIC_VM_HASH
+                crn_url=node_info.url.url, vm_hash=ItemHash(CRN_DIAGNOSTIC_VM_HASH)
             )
         else:
             logger.debug("Could not start diagnostic VM, skipping IPv6 ping check")
@@ -586,8 +588,8 @@ async def collect_all_node_metrics() -> NodeMetrics:
         server=ip_address,
         server_asn=asn,
         server_as_name=as_name,
-        ccn=ccn_metrics,
-        crn=crn_metrics,
+        ccn=list(ccn_metrics),
+        crn=list(crn_metrics),
     )
 
 
