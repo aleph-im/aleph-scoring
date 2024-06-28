@@ -37,7 +37,7 @@ from aleph_scoring.config import settings
 from aleph_scoring.metrics.asn import get_asn_database
 from aleph_scoring.types.vm_type import VmType
 
-from .models import AlephNodeMetrics, CcnMetrics, CrnMetrics, NodeMetrics
+from aleph_scoring.metrics.models import AlephNodeMetrics, CcnMetrics, CrnMetrics, NodeMetrics
 
 logger = logging.getLogger(__name__)
 
@@ -54,12 +54,8 @@ CCN_FILE_DOWNLOAD_PATH = (
     "50645d4ccfddb7540e7bb17ffa5609ec8a980e588e233f0e2c4451f6f9da6ebd"
 )
 
-CRN_DIAGNOSTIC_VM_HASH = (
-    "67705389842a0a1b95eaa408b009741027964edc805997475e95c505d642edd8"
-)
-
-CRN_DIAGNOSTIC_VM_PATH = "{url}vm/" + CRN_DIAGNOSTIC_VM_HASH
 IP4_SERVICE_URLS = [ "https://v4.ident.me/", "https://api.ipify.org/" ]
+CRN_DIAGNOSTIC_VM_PATH = "{url}vm/" + settings.DIAGNOSTIC_VM_ITEM_HASH
 
 
 TimeoutGenerator = NewType("TimeoutGenerator", Callable[[], aiohttp.ClientTimeout])
@@ -240,35 +236,43 @@ def get_executable_ipv6(
 async def ping(
     ip_address: Union[IPv4Address, IPv6Address], count: int
 ) -> Optional[float]:
+    """Ping an IP address and return the minimum response time in seconds."""
     result = await async_ping(
         address=str(ip_address), count=count, timeout=2, privileged=False
     )
     if result.is_alive:
-        return result.avg_rtt
+        return result.min_rtt / 1000  # Result is in milliseconds
 
     logger.debug("Ping %s timed out", str(ip_address))
     return None
 
 
 async def ping_vm(crn_url: str, vm_hash: ItemHash) -> Optional[float]:
-    crn_ipv6 = get_ipv6(crn_url)
+    """Ping a VM over IPv6 and return the minimum response time in seconds.
+
+    The current implementation only sends one ping packet, so the result
+    is the response time of the single packet.
+    """
+    crn_ipv6: Optional[str] = get_ipv6(crn_url)
     if not crn_ipv6:
         return None
 
     crn_ipv6_range = IPv6Network(crn_ipv6, strict=False)
-    vm_ipv6 = get_executable_ipv6(
+    vm_ipv6: IPv6Address = get_executable_ipv6(
         crn_ipv6_range=crn_ipv6_range, vm_type=VmType.microvm, item_hash=vm_hash
     )
 
-    average_response_time = await ping(vm_ipv6, count=1)
-    if average_response_time:
+    min_response_time = await ping(vm_ipv6, count=1)
+    if min_response_time:
         logger.debug(
             "VM %s is reachable over IPv6, pinged in %.2f seconds",
             vm_ipv6,
-            average_response_time,
+            min_response_time,
         )
+    else:
+        logger.debug("VM %s is not reachable over IPv6", vm_ipv6)
 
-    return average_response_time
+    return min_response_time
 
 
 def lookup_asn(
@@ -459,12 +463,12 @@ async def get_crn_metrics(
         )[0]
 
         if diagnostic_vm_latency is not None:
-            vm_ping_latency = await ping_vm(
-                crn_url=node_info.url.url, vm_hash=ItemHash(CRN_DIAGNOSTIC_VM_HASH)
+            diagnostic_vm_ping_latency = await ping_vm(
+                crn_url=node_info.url.url, vm_hash=ItemHash(settings.DIAGNOSTIC_VM_ITEM_HASH)
             )
         else:
             logger.debug("Could not start diagnostic VM, skipping IPv6 ping check")
-            vm_ping_latency = None
+            diagnostic_vm_ping_latency = None
 
         full_check_latency = (
             await measure_http_latency(
@@ -506,7 +510,7 @@ async def get_crn_metrics(
         base_latency_ipv4=base_latency_ipv4,
         diagnostic_vm_latency=diagnostic_vm_latency,
         full_check_latency=full_check_latency,
-        vm_ping_latency=vm_ping_latency,
+        diagnostic_vm_ping_latency=diagnostic_vm_ping_latency,
     )
 
 
