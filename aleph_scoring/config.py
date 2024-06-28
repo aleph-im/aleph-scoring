@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     LOGGING_LEVEL: int = logging.DEBUG
     SENTRY_DSN: Optional[HttpUrl] = None
 
+    DIAGNOSTIC_VM_ITEM_HASH = (
+        "63faf8b5db1cf8d965e6a464a0cb8062af8e7df131729e48738342d956f29ace"
+    )
+
     VERSION_GRACE_PERIOD: timedelta = timedelta(weeks=2)
     SCORE_METRICS_PERIOD: timedelta = timedelta(days=1)  # TODO: bring back to 2 weeks
 
