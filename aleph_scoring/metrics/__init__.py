@@ -27,7 +27,7 @@ from urllib.parse import urlparse
 import aiohttp
 import async_timeout
 import pyasn
-from aleph.sdk import AlephClient
+from aleph.sdk.client.http import AlephHttpClient
 from aleph_message.models import ItemHash
 from icmplib import async_ping
 from pydantic import BaseModel, validator
@@ -544,11 +544,10 @@ async def collect_all_crn_metrics(node_data: Dict[str, Any]) -> Sequence[CrnMetr
 
 
 async def get_aleph_nodes() -> Dict:
-    async with AlephClient(api_server=settings.NODE_DATA_HOST) as client:
+    async with AlephHttpClient(api_server=settings.NODE_DATA_HOST) as client:
         return await client.fetch_aggregate(
             address=settings.NODE_DATA_ADDR,
             key="corechannel",
-            limit=50,
         )
 
 
