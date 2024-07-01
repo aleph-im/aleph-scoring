@@ -541,7 +541,7 @@ async def get_crn_metrics(
         diagnostic_vm_latency=diagnostic_vm_latency,
         full_check_latency=full_check_latency,
         diagnostic_vm_ping_latency=diagnostic_vm_ping_latency,
-        features=features_supported,
+        features=features_supported or list(),
     )
 
 

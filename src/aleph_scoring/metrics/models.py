@@ -27,7 +27,7 @@ class CcnMetrics(AlephNodeMetrics):
 class CrnMetrics(AlephNodeMetrics):
     diagnostic_vm_latency: Optional[float]
     full_check_latency: Optional[float]
-    diagnostic_vm_ping_latency: Optional[float] = None
+    diagnostic_vm_ping_latency: Optional[float]
     features: List[str] = Field(
         default_factory=list, description="List of features supported by the node"
     )
