@@ -29,7 +29,6 @@ import async_timeout
 import pyasn
 from aleph.sdk.client.http import AlephHttpClient
 from aleph_message.models import ItemHash
-from aleph_message.models.execution.environment import CpuProperties
 from icmplib import async_ping
 from pydantic import BaseModel, validator
 from urllib3.util import Url, parse_url
