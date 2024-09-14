@@ -1,0 +1,61 @@
+[build-system]
+requires = [ "hatchling", "hatch-vcs",]
+build-backend = "hatchling.build"
+
+[project]
+name = "aleph-scoring"
+dynamic = ["version"]
+description = "Aleph Scoring Project"
+requires-python = ">=3.11"
+readme = "README.md"
+
+dependencies = [
+    "aleph-message==0.4.9",
+    "aleph-sdk-python==1.0.1",
+    "asyncpg==0.29.0",
+    "cachetools",
+    "icmplib==3.0.4",
+    # "bokeh==3.5.2",
+    # "jupyterlab==4.2.5",
+    # "matplotlib==3.9.2",
+    # "nbconvert==7.16.4",
+    ## "pandas==2.2.2",
+    # "pandoc==2.4",
+    "pyasn==1.6.2",
+    "typer",
+    "schedule",
+    "sentry-sdk",
+    # "tables==3.10.1",
+    # "holoviews==1.19.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black==23.1.0",
+    "pytest==7.2.1",
+    "mypy==1.0.1",
+    "pytest-asyncio==0.20.3",
+    "isort==5.12.0",
+]
+
+[project.urls]
+Documentation = "https://docs.aleph.im/"
+Issues = "https://github.com/aleph-im/aleph-scoring/issues"
+Source = "https://github.com/aleph-im/aleph-scoring"
+Discussions = "https://community.aleph.im/"
+
+[project.scripts]
+scoring = "aleph_scoring.__main__:main"
+
+[tool.hatch.version]
+source = "vcs"
+
+
+[tool.hatch.build.targets.wheel]
+packages = ["aleph_scoring"]
+
+[tool.hatch.metadata]
+allow-direct-references = false
+
+[tool.hatch.envs.default.scripts]
+measure = "python -m aleph_scoring measure"
