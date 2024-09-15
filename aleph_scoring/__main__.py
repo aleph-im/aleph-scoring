@@ -33,6 +33,21 @@ def save_as_json(node_metrics: NodeMetrics, file: Path):
         f.write(node_metrics.json(indent=4))
 
 
+def ensure_private_key_available():
+    """Ensure that the Ethereum private key is available.
+
+    This can be done early, before running time-consuming operations.
+    """
+    if not settings.ETHEREUM_PRIVATE_KEY and not settings.ETHEREUM_PRIVATE_KEY_PATH:
+        raise ValueError(
+            "Could not read Ethereum private key from ETHEREUM_PRIVATE_KEY or ETHEREUM_PRIVATE_KEY_PATH."
+        )
+    if settings.ETHEREUM_PRIVATE_KEY_PATH and not settings.ETHEREUM_PRIVATE_KEY_PATH.exists():
+        raise ValueError(
+            f"Could not read Ethereum private key from ETHEREUM_PRIVATE_KEY_PATH: {settings.ETHEREUM_PRIVATE_KEY_PATH}"
+        )
+
+
 def get_aleph_account():
 
     private_key_str: str
@@ -135,6 +150,8 @@ def measure(
     ),
 ):
     logging.basicConfig(level=LogLevel[log_level])
+    if publish:
+        ensure_private_key_available()
     run_measurements(output=output, publish=publish)
 
 
@@ -153,6 +170,8 @@ def measure_on_schedule(
     ),
 ):
     logging.basicConfig(level=LogLevel[log_level])
+    if publish:
+        ensure_private_key_available()
     compute_scores(output=output, publish=publish, log_level=log_level)
 
     schedule.every(settings.DAEMON_MODE_PERIOD_HOURS).hours.at(":00").do(
@@ -186,6 +205,8 @@ def measure_n_times(
     """Measure the performance n times."""
 
     logging.basicConfig(level=LogLevel[log_level])
+    if publish:
+        ensure_private_key_available()
 
     for i in range(n):
         t0 = time.time()
@@ -223,6 +244,8 @@ def compute_scores(
     ),
 ):
     logging.basicConfig(level=LogLevel[log_level])
+    if publish:
+        ensure_private_key_available()
 
     to_date = datetime.utcnow()
     from_date = to_date - settings.SCORE_METRICS_PERIOD
@@ -283,6 +306,9 @@ def compute_on_schedule(
     ),
 ):
     logging.basicConfig(level=LogLevel[log_level])
+    if publish:
+        ensure_private_key_available()
+
     compute_scores(output=output, publish=publish, log_level=log_level)
 
     schedule.every(settings.DAEMON_MODE_PERIOD_HOURS).hours.at(":00").do(
