@@ -159,10 +159,13 @@ async def measure_http_latency(
                     logger.debug(f"Success when fetching {url}")
                     return end - start, None
     except aiohttp.ClientResponseError:
-        logger.debug(f"Error when fetching {url}")
+        logger.debug(f"Client error when fetching {url}")
         return None, None
     except aiohttp.ClientConnectorError:
-        logger.debug(f"Error when fetching {url}")
+        logger.debug(f"Connection error when fetching {url}")
+        return None, None
+    except aiohttp.ServerDisconnectedError:
+        logger.debug(f"Server error when fetching {url}")
         return None, None
     except asyncio.TimeoutError:
         logger.debug(f"Timeout error when fetching {url}")
