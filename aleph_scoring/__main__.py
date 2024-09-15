@@ -34,12 +34,18 @@ def save_as_json(node_metrics: NodeMetrics, file: Path):
 
 
 def get_aleph_account():
-    if not settings.ETHEREUM_PRIVATE_KEY:
+
+    private_key_str: str
+    if settings.ETHEREUM_PRIVATE_KEY_PATH:
+        private_key_str = settings.ETHEREUM_PRIVATE_KEY_PATH.read_text().strip()
+    elif settings.ETHEREUM_PRIVATE_KEY:
+        private_key_str = settings.ETHEREUM_PRIVATE_KEY
+    else:
         raise ValueError(
             "Could not read Ethereum private key from ETHEREUM_PRIVATE_KEY."
         )
 
-    private_key = HexBytes(settings.ETHEREUM_PRIVATE_KEY)
+    private_key = HexBytes(private_key_str)
     account = ETHAccount(private_key)
     return account
 
