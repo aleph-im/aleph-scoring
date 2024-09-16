@@ -57,7 +57,7 @@ CRN_DIAGNOSTIC_VM_HASH = (
 )
 
 CRN_DIAGNOSTIC_VM_PATH = "{url}vm/" + CRN_DIAGNOSTIC_VM_HASH
-IP4_SERVICE_URL = "https://v4.ident.me/"
+IP4_SERVICE_URLS = [ "https://v4.ident.me/", "https://api.ipify.org/" ]
 
 
 TimeoutGenerator = NewType("TimeoutGenerator", Callable[[], aiohttp.ClientTimeout])
@@ -554,15 +554,22 @@ async def collect_server_metadata(asn_db: pyasn.pyasn) -> Tuple[str, int, str]:
 
     async def get_ip4_from_service() -> str:
         """Get the public IPv4 of this system by calling a third-party service"""
-        async with aiohttp.ClientSession() as session:
-            async with session.get(IP4_SERVICE_URL) as resp:
-                resp.raise_for_status()
-                ip = await resp.text()
+        for ip4_service_url in IP4_SERVICE_URLS:
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(ip4_service_url) as resp:
+                        resp.raise_for_status()
+                        ip = await resp.text()
 
-                if is_valid_ip4(ip):
-                    return ip
-                else:
-                    raise ValueError(f"Response does not match IPv4 format: {ip}")
+                        if is_valid_ip4(ip):
+                            return ip
+                        else:
+                            raise ValueError(f"Response does not match IPv4 format: {ip}")
+            except aiohttp.ClientConnectorError as error:
+                logger.warning(f"Could not connect to {ip4_service_url}: {error}")
+                continue
+        else:
+            raise ValueError("Could not determine public IPv4 address")
 
     ip_address = await get_ip4_from_service()
     # lookup_asn does not work for localhost
