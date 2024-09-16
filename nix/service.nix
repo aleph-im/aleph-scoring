@@ -5,7 +5,7 @@ let
       owner = "aleph-im";
       repo = "aleph-scoring";
       rev = "hoh-add-nix";
-      sha256 = "sha256-uXoMzCjGWZbyaca1kF4i628MTLeSjIdIRoWqyVN5y78=";
+      sha256 = "sha256-SkLOWKql6RtdGQPIUDkqFHgCa98OzKWFL8/bQyXXHdM=";
     })
     { };
 in
