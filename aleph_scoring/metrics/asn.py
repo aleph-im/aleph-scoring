@@ -89,7 +89,7 @@ def find_latest_routeviews(
 ) -> Tuple[Server, str, str]:
     # RouteViews archives are as follows:
     # ftp://archive.routeviews.org/datapath/YYYYMM/ribs/XXXX
-    archive_ipv = str(archive_ipv)
+    archive_ipv: str = str(archive_ipv)
     assert archive_ipv in ("4", "6", "46", "64")
     return find_latest_in_ftp(
         server=Server("archive.routeviews.org"),
@@ -135,6 +135,8 @@ def download_asnames() -> str:
 
 def _parse_asname_line(line: str) -> Tuple[str, str]:
     match = EXTRACT_ASNAME_C.match(line)
+    if not match:
+        raise ValueError(f"Could not parse line: {line}, no match found.")
     return match.groups()
 
 
