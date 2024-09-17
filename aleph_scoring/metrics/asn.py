@@ -85,7 +85,7 @@ def find_latest_in_ftp(
 
 # Imported from pyasn_util_download.py
 def find_latest_routeviews(
-    archive_ipv: Literal["4", "6", "46", "64"]
+    archive_ipv: Literal["4", "6", "46", "64"],
 ) -> Tuple[Server, str, str]:
     # RouteViews archives are as follows:
     # ftp://archive.routeviews.org/datapath/YYYYMM/ribs/XXXX

@@ -42,14 +42,16 @@ def ensure_private_key_available():
         raise ValueError(
             "Could not read Ethereum private key from ETHEREUM_PRIVATE_KEY or ETHEREUM_PRIVATE_KEY_PATH."
         )
-    if settings.ETHEREUM_PRIVATE_KEY_PATH and not settings.ETHEREUM_PRIVATE_KEY_PATH.exists():
+    if (
+        settings.ETHEREUM_PRIVATE_KEY_PATH
+        and not settings.ETHEREUM_PRIVATE_KEY_PATH.exists()
+    ):
         raise ValueError(
             f"Could not read Ethereum private key from ETHEREUM_PRIVATE_KEY_PATH: {settings.ETHEREUM_PRIVATE_KEY_PATH}"
         )
 
 
 def get_aleph_account():
-
     private_key_str: str
     if settings.ETHEREUM_PRIVATE_KEY_PATH:
         private_key_str = settings.ETHEREUM_PRIVATE_KEY_PATH.read_text().strip()

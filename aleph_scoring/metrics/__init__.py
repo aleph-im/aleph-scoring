@@ -29,7 +29,6 @@ import async_timeout
 import pyasn
 from aleph.sdk import AlephHttpClient
 from aleph_message.models import ItemHash
-from aleph_message.models.execution.environment import CpuProperties
 from icmplib import async_ping
 from pydantic import BaseModel, validator
 from urllib3.util import Url, parse_url
@@ -59,7 +58,7 @@ CCN_FILE_DOWNLOAD_PATH = (
     "50645d4ccfddb7540e7bb17ffa5609ec8a980e588e233f0e2c4451f6f9da6ebd"
 )
 
-IP4_SERVICE_URLS = [ "https://v4.ident.me/", "https://api.ipify.org/" ]
+IP4_SERVICE_URLS = ["https://v4.ident.me/", "https://api.ipify.org/"]
 CRN_DIAGNOSTIC_VM_PATH = "{url}vm/" + settings.DIAGNOSTIC_VM_ITEM_HASH
 
 
@@ -607,7 +606,9 @@ async def collect_server_metadata(asn_db: pyasn.pyasn) -> Tuple[str, int, str]:
                         if is_valid_ip4(ip):
                             return ip
                         else:
-                            raise ValueError(f"Response does not match IPv4 format: {ip}")
+                            raise ValueError(
+                                f"Response does not match IPv4 format: {ip}"
+                            )
             except aiohttp.ClientConnectorError as error:
                 logger.warning(f"Could not connect to {ip4_service_url}: {error}")
                 continue
