@@ -77,6 +77,8 @@ def get_latest_release(
                 continue
             else:
                 return release
+    else:
+        raise ValueError("No release found.")
 
 
 # Cache requests to GitHub to avoid reaching rate limiting.
@@ -89,12 +91,16 @@ def get_latest_github_releases(
     response.raise_for_status()
     result = response.json()
 
-    latest_release: GithubRelease = get_latest_release(result, is_prerelease=False)
+    latest_release: Optional[GithubRelease] = get_latest_release(
+        result, is_prerelease=False
+    )
+    if not latest_release:
+        raise ValueError("No release found.")
+
     previous_release: Optional[GithubRelease] = get_latest_release(
         result, released_before=latest_release
     )
     prerelease: Optional[GithubRelease] = get_latest_release(result, is_prerelease=True)
-
     return latest_release, previous_release, prerelease
 
 

@@ -13,6 +13,7 @@ from aleph_scoring.scoring.models import (
     CrnMeasurements,
     CrnScore,
     NodeScores,
+    Score,
 )
 from aleph_scoring.utils import Period, database_connection, get_latest_github_releases
 
@@ -98,7 +99,7 @@ async def compute_crn_scores(
         period,
     ):
         # This contains custom logic on the scores
-        performance_score = (
+        performance_score = Score(
             measurements.base_latency_score_p25
             * measurements.base_latency_score_p95
             * measurements.diagnostic_vm_latency_score_p25
@@ -111,6 +112,7 @@ async def compute_crn_scores(
             # * measurements.full_check_latency_score_p95
         ) ** (1 / 4)
 
+        version_score: Score
         if not sum(
             (
                 measurements.node_version_missing,
@@ -122,7 +124,7 @@ async def compute_crn_scores(
             )
         ):
             logger.warning(f"No version measurement for node {node_id}")
-            version_score = 0
+            version_score = Score(0)
         elif (
             measurements.node_version_missing
             > (
@@ -135,26 +137,30 @@ async def compute_crn_scores(
             / 5
         ):
             # Too many missing version metrics.
-            version_score = 0
+            version_score = Score(0)
         else:
-            version_score = (
-                measurements.node_version_latest
-                + measurements.node_version_outdated
-                + measurements.node_version_prerelease
-            ) / (
-                measurements.node_version_latest
-                + measurements.node_version_outdated
-                + measurements.node_version_obsolete
-                + measurements.node_version_missing
-                + measurements.node_version_other
-                + measurements.node_version_prerelease
+            version_score = Score(
+                (
+                    measurements.node_version_latest
+                    + measurements.node_version_outdated
+                    + measurements.node_version_prerelease
+                )
+                / (
+                    measurements.node_version_latest
+                    + measurements.node_version_outdated
+                    + measurements.node_version_obsolete
+                    + measurements.node_version_missing
+                    + measurements.node_version_other
+                    + measurements.node_version_prerelease
+                )
             )
 
-        decentralization_score = (
-            1 - (measurements.nodes_with_identical_asn / measurements.total_nodes)
-        ) ** 2
+        decentralization_score = Score(
+            (1 - (measurements.nodes_with_identical_asn / measurements.total_nodes))
+            ** 2
+        )
 
-        total_score = (performance_score * version_score) ** (1 / 2)
+        total_score = Score((performance_score * version_score) ** (1 / 2))
 
         result.append(
             CrnScore(
@@ -275,7 +281,7 @@ async def compute_ccn_scores(
             )
         ):
             logger.warning(f"No version measurement for node {node_id}")
-            version_score = 0
+            version_score = Score(0)
         elif (
             measurements.node_version_missing
             > (
@@ -288,7 +294,7 @@ async def compute_ccn_scores(
             / 5
         ):
             logger.debug(f"Too many missing version metrics for CRN node {node_id}")
-            version_score = 0
+            version_score = Score(0)
         else:
             version_score = (
                 measurements.node_version_latest

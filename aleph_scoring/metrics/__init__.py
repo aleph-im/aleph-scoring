@@ -72,11 +72,13 @@ def timeout_generator(
     def randomize(value: float) -> float:
         return value + value * 0.3 * random()
 
-    return lambda: aiohttp.ClientTimeout(
-        total=randomize(total),
-        connect=randomize(connect),
-        sock_connect=randomize(sock_connect),
-        sock_read=randomize(sock_read),
+    return TimeoutGenerator(
+        lambda: aiohttp.ClientTimeout(
+            total=randomize(total),
+            connect=randomize(connect),
+            sock_connect=randomize(sock_connect),
+            sock_read=randomize(sock_read),
+        )
     )
 
 
@@ -345,7 +347,7 @@ async def get_ccn_metrics(
     async with aiohttp.ClientSession(
         timeout=timeout_generator(),
         connector=aiohttp.TCPConnector(
-            family=0,  # either IPv4 or IPv6
+            family=socket.AF_UNSPEC,  # either IPv4 or IPv6
             keepalive_timeout=300,
             limit=1000,
             limit_per_host=20,
@@ -405,7 +407,7 @@ async def get_ccn_metrics(
         measured_at=measured_at.timestamp(),
         node_id=node_info.hash,
         url=url,
-        asn=asn,
+        asn=int(asn) if asn else None,
         as_name=as_name,
         version=version,
         # days_outdated=compute_ccn_version_days_outdated(version=version),
@@ -536,7 +538,7 @@ async def get_crn_metrics(
         measured_at=measured_at.timestamp(),
         node_id=node_info.hash,
         url=url,
-        asn=asn,
+        asn=int(asn) if asn else None,
         as_name=as_name,
         version=version,
         # days_outdated=compute_crn_version_days_outdated(version=version),
@@ -545,7 +547,7 @@ async def get_crn_metrics(
         diagnostic_vm_latency=diagnostic_vm_latency,
         full_check_latency=full_check_latency,
         diagnostic_vm_ping_latency=diagnostic_vm_ping_latency,
-        features=features_supported,
+        features=features_supported or [],
     )
 
 
