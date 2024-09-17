@@ -50,7 +50,6 @@ scoring = "aleph_scoring.__main__:main"
 [tool.hatch.version]
 source = "vcs"
 
-
 [tool.hatch.build.targets.wheel]
 packages = ["aleph_scoring"]
 
@@ -59,3 +58,45 @@ allow-direct-references = false
 
 [tool.hatch.envs.default.scripts]
 measure = "python -m aleph_scoring measure"
+
+[tool.hatch.envs.linting]
+detached = true
+dependencies = [
+    "black==24.2.0",
+    "mypy==1.9.0",
+    "mypy-extensions==1.0.0",
+    "ruff==0.4.8",
+    "isort==5.13.2",
+]
+[tool.hatch.envs.linting.scripts]
+style = [
+    "ruff check {args:.} ./aleph_scoring/ ./tests/",
+    "black --check --diff {args:} ./aleph_scoring/ ./tests/",
+    "isort --check-only --profile black {args:} ./aleph_scoring/ ./tests/",
+]
+fmt = [
+    "black {args:} ./aleph_scoring/ ./tests/",
+    "ruff check --fix {args:.} ./aleph_scoring/ ./tests/",
+    "isort --profile black {args:} ./aleph_scoring/ ./tests/",
+    "style",
+]
+all = [
+    "style",
+]
+
+[tool.hatch.envs.typing]
+dependencies = [
+    "mypy==1.11.2",
+    "mypy-extensions==1.0.0",
+    "types-cachetools~=5.5.0.20240820",
+    "types-requests~=2.32.0.20240914",
+    "pytest==8.3.3",
+]
+[tool.hatch.envs.typing.scripts]
+typing = "mypy --config-file=pyproject.toml {args:} ./aleph_scoring/ ./tests/"
+all = [
+    "typing"
+]
+
+[tool.mypy]
+check_untyped_defs = true
