@@ -6,6 +6,7 @@ import time
 from datetime import datetime, timezone
 from ipaddress import IPv4Address, IPv6Address, IPv6Network
 from random import random, shuffle
+import psutil
 from typing import (
     Any,
     Awaitable,
@@ -286,14 +287,21 @@ def lookup_asn(
 ) -> Union[Tuple[str, str], Tuple[None, None]]:
     ip_addr = get_ipv4(url)
     if ip_addr is None:
-        logger.debug("Could not determine IP address for %s", url)
+        logger.info("Could not determine IP address for %s", url)
         return None, None
     asn = asn_db.lookup(ip_addr)[0]
     if asn is None:
-        logger.debug("ASN lookup for (%s) %s did not return a result", ip_addr, url)
+        logger.info("ASN lookup for (%s) %s did not return a result", ip_addr, url)
         return None, None
 
     return asn, asn_db.get_as_name(asn)
+
+
+def seconds_since_process_has_started() -> float:
+    """Returns the number of seconds since the process has started"""
+    process = psutil.Process()  # current process
+    start_time = process.create_time()
+    return time.time() - start_time
 
 
 class CcnBuildInfo(BaseModel):
@@ -320,8 +328,21 @@ class CcnApiMetricsResponse(BaseModel):
 async def get_ccn_metrics(
     timeout_generator: TimeoutGenerator, asn_db: pyasn.pyasn, node_info: NodeInfo
 ) -> CcnMetrics:
-    # Avoid doing all the calls at the same time
-    await asyncio.sleep(random() * 30)
+    """Fetch or measure the metrics of a Core Channel Node."""
+    # Starting to call all the nodes at the same time can cause issues, in particular:
+    #  - bias due to the computing overhead
+    #  - network issues due to opening many concurrent connections
+    #  - throttling by hosting providers
+    #
+    # In order to avoid this scenario, each coroutine (specific to one host)
+    # waits for a random time (linear distribution) between 0 and 60 minutes
+    # (excluding the time to get to this step: update ASN database and fetch node list)
+    delay_seconds: float = (random() * 60 * 60) - seconds_since_process_has_started()
+    logger.debug(
+        f"Waiting {delay_seconds} seconds before fetching metrics for {node_info.hash}"
+    )
+    await asyncio.sleep(delay_seconds)
+    logger.debug(f"Done waiting for {node_info.hash}")
 
     url = node_info.url.url
     measured_at = datetime.now(tz=timezone.utc)
@@ -449,8 +470,21 @@ async def fetch_supported_features(
 async def get_crn_metrics(
     timeout_generator: TimeoutGenerator, asn_db: pyasn.pyasn, node_info: NodeInfo
 ) -> CrnMetrics:
-    # Avoid doing all the calls at the same time
-    await asyncio.sleep(random() * 30)
+    """Fetch or measure the metrics of a Core Channel Node."""
+    # Starting to call all the nodes at the same time can cause issues, in particular:
+    #  - bias due to the computing overhead
+    #  - network issues due to opening many concurrent connections
+    #  - throttling by hosting providers
+    #
+    # In order to avoid this scenario, each coroutine (specific to one host)
+    # waits for a random time (linear distribution) between 0 and 60 minutes.
+    # (excluding the time to get to this step: update ASN database and fetch node list)
+    delay_seconds: float = (random() * 60 * 60) - seconds_since_process_has_started()
+    logger.debug(
+        f"Waiting {delay_seconds} seconds before fetching metrics for {node_info.hash}"
+    )
+    await asyncio.sleep(delay_seconds)
+    logger.debug(f"Done waiting for {node_info.hash}")
 
     url = node_info.url.url
     measured_at = datetime.utcnow()
@@ -630,10 +664,14 @@ async def collect_all_node_metrics() -> NodeMetrics:
     # Aleph node metrics
     aleph_nodes = await get_aleph_nodes()
     logger.debug("Fetched node data")
-    ccn_metrics = await collect_all_ccn_metrics(aleph_nodes)
-    logger.debug("Fetched CCN metrics")
-    crn_metrics = await collect_all_crn_metrics(aleph_nodes)
-    logger.debug("Fetched CRN metrics")
+
+    # CRN and CRN metrics are measured concurrently since they are randomly
+    # scheduled over the next hour usinc `asyncio.sleep` in each node coroutine.
+    ccn_metrics, crn_metrics = await asyncio.gather(
+        collect_all_ccn_metrics(aleph_nodes),
+        collect_all_crn_metrics(aleph_nodes),
+    )
+    logger.debug("Fetched node metrics")
 
     return NodeMetrics(
         server=ip_address,

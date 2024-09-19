@@ -137,6 +137,7 @@ python3.pkgs.buildPythonPackage rec {
     python3.pkgs.python-magic
     python3.pkgs.sentry-sdk
     python3.pkgs.typer
+    python3.pkgs.psutil
 
     aioipfs
     aleph-sdk-python
