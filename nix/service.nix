@@ -41,7 +41,14 @@ in
 
   environment.systemPackages = with pkgs; [
     alephScoring
+    btop
   ];
+
+  # Systems with low RAM (1GB) may have issues when rebuilding
+  swapDevices = [ {
+    device = "/var/lib/swapfile";
+    size = 4*1024; # in megabytes
+  } ];
 
   services.prometheus.exporters.node = {
     enable = true;
