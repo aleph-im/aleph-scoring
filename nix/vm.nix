@@ -1,11 +1,22 @@
-{ modulesPath, pkgs, config, lib, ... }:
+{
+  modulesPath,
+  pkgs,
+  config,
+  lib,
+  ...
+}:
 {
   imports = [
     (modulesPath + "/profiles/qemu-guest.nix")
     ./service.nix
   ];
-  boot.initrd.availableKernelModules =
-    [ "ata_piix" "uhci_hcd" "virtio_pci" "sr_mod" "virtio_blk" ];
+  boot.initrd.availableKernelModules = [
+    "ata_piix"
+    "uhci_hcd"
+    "virtio_pci"
+    "sr_mod"
+    "virtio_blk"
+  ];
   boot.initrd.kernelModules = [ ];
   boot.kernelModules = [ "kvm-intel" ];
   boot.extraModulePackages = [ ];
@@ -35,7 +46,6 @@
   services.getty.autologinUser = "root";
 
   services.openssh.enable = true;
-  services.openssh.settings.PasswordAuthentication = true;
 
   environment = {
     shellAliases = {
