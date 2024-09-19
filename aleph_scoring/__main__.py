@@ -335,11 +335,18 @@ def export_as_html(input_file: Optional[Path]):
     os.system("jupyter nbconvert --execute Node\\ Score\\ Analysis.ipynb --to html")
 
 
+def get_sentry_dsn(app_settings):
+    if app_settings.SENTRY_DSN:
+        return app_settings.SENTRY_DSN
+
+    sentry_dsn_path = app_settings.SENTRY_DSN_PATH
+    if sentry_dsn_path and sentry_dsn_path.is_file():
+        return sentry_dsn_path.read_text().strip()
+
+
 def main():
-    if settings.SENTRY_DSN:
-        sentry_sdk.init(
-            settings.SENTRY_DSN,
-        )
+    sentry_dsn: str = get_sentry_dsn(settings)
+    sentry_sdk.init(sentry_dsn)
     app()
 
 

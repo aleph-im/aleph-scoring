@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     HTTP_REQUEST_TIMEOUT: float = 10.0
     LOGGING_LEVEL: int = logging.DEBUG
     SENTRY_DSN: Optional[HttpUrl] = None
+    SENTRY_DSN_PATH: Optional[Path] = None
 
     DIAGNOSTIC_VM_ITEM_HASH = (
         "63faf8b5db1cf8d965e6a464a0cb8062af8e7df131729e48738342d956f29ace"

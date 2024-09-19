@@ -25,6 +25,7 @@ in
     environment = {
       ALEPH_SCORING_ASN_DB_DIRECTORY = "/var/lib/asn";
       ALEPH_SCORING_ETHEREUM_PRIVATE_KEY_PATH = "/srv/secrets/aleph.im/ethereum.key";
+      ALEPH_SCORING_SENTRY_DSN_PATH = "/srv/secrets/aleph.im/sentry-dsn.txt";
     };
   };
 
