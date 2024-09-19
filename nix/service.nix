@@ -51,6 +51,15 @@ in
     size = 4*1024; # in megabytes
   } ];
 
+  services.openssh = {
+    enable = true;
+    settings = {
+      PasswordAuthentication = false;
+      KbdInteractiveAuthentication = false;
+      PermitRootLogin = "yes";
+    };
+  };
+
   services.prometheus.exporters.node = {
     enable = true;
     enabledCollectors = [ "systemd" ];
