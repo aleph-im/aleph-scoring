@@ -4,8 +4,8 @@ let
     (pkgs.fetchFromGitHub {
       owner = "aleph-im";
       repo = "aleph-scoring";
-      rev = "hoh-add-nix";
-      sha256 = "sha256-SkLOWKql6RtdGQPIUDkqFHgCa98OzKWFL8/bQyXXHdM=";
+      rev = "b026ce63b76265ad749945a8c184ec080512c0bb";
+      sha256 = "sha256-ClwjGVnS3SEWZ3BL6M5jRwW695imEOV25PNbQOIeR8U=";
     })
     { };
 in
@@ -33,8 +33,8 @@ in
     description = "Timer for the NixOS rebuild service";
     wantedBy = [ "timers.target" ];
     timerConfig = {
-      # Every hours + 5 minutes
-      OnCalendar = "*-*-* *:05:00";
+      # Every hours
+      OnCalendar = "*-*-* *:00:00";
       Persistent = true;
     };
   };
