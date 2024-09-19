@@ -4,8 +4,8 @@ let
     (pkgs.fetchFromGitHub {
       owner = "aleph-im";
       repo = "aleph-scoring";
-      rev = "b026ce63b76265ad749945a8c184ec080512c0bb";
-      sha256 = "sha256-ClwjGVnS3SEWZ3BL6M5jRwW695imEOV25PNbQOIeR8U=";
+      rev = "b0b652465b65db0947fdbeac72ee8cf86f717937";
+      sha256 = "sha256-+rYKzzxQTrJ3AO2nKK6Y4+gHKvLNB8LzBABa2h4F+UA=";
     })
     { };
 in
