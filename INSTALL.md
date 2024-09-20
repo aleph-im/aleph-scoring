@@ -94,6 +94,15 @@ ssh <server> mkdir -p /srv/secrets/aleph.im
 scp <key-path> <server>:/srv/secrets/aleph.im/ethereum.key
 ```
 
+### Setting up the Sentry DSN
+
+The Sentry DSN is the URL provided by Sentry to receive stacktraces.
+
+```shell
+echo "https://<...>@<...>.ingest.sentry.io/<...>" > sentry-dsn.txt
+scp sentry-dsn.txt <server>:/srv/secrets/aleph.im/sentry-dsn.txt
+```
+
 ### Configuring or Updating
 
 The `service.nix` contains the aleph.im specific configuration for the metrics
@@ -105,3 +114,9 @@ scp nix/service.nix <server>:/etc/nixos/service.nix
 
 Ensure this file is imported by `/etc/nixos/configuration.nix` or `/etc/nixos/host.nix`
 on each server.
+
+Then switch to the new configuration using.
+
+```shell
+ssh <server> nixos-rebuild switch
+```
