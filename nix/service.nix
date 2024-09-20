@@ -1,18 +1,9 @@
 { pkgs, ... }:
 let
-  alephScoring = pkgs.callPackage
-    (pkgs.fetchFromGitHub {
-      owner = "aleph-im";
-      repo = "aleph-scoring";
-      rev = "b0b652465b65db0947fdbeac72ee8cf86f717937";
-      sha256 = "sha256-+rYKzzxQTrJ3AO2nKK6Y4+gHKvLNB8LzBABa2h4F+UA=";
-    })
-    { };
+  inherit (import ./aleph-scoring.nix { inherit pkgs; }) alephScoring;
 in
 {
-  systemd.tmpfiles.rules = [
-    "d /var/lib/asn 0755 root root -"
-  ];
+  systemd.tmpfiles.rules = [ "d /var/lib/asn 0755 root root -" ];
 
   systemd.services.aleph-scoring-measure = {
     enable = true;
@@ -46,10 +37,12 @@ in
   ];
 
   # Systems with low RAM (1GB) may have issues when rebuilding
-  swapDevices = [ {
-    device = "/var/lib/swapfile";
-    size = 4*1024; # in megabytes
-  } ];
+  swapDevices = [
+    {
+      device = "/var/lib/swapfile";
+      size = 4 * 1024; # in megabytes
+    }
+  ];
 
   services.openssh = {
     enable = true;
