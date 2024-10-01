@@ -69,6 +69,24 @@ runcmd:
   - curl https://raw.githubusercontent.com/elitak/nixos-infect/master/nixos-infect | PROVIDER=digitalocean NIX_CHANNEL=nixos-24.05 bash 2>&1 | tee /tmp/infect.log```
 ```
 
+#### Scaleway Specificities
+
+When creating an instance, specify the following Cloud-Init configuration ([source](https://wiki.nixos.org/wiki/Install_NixOS_on_Scaleway_X86_Virtual_Cloud_Server)):
+
+```yaml
+#cloud-config
+write_files:
+- path: /etc/nixos/host.nix
+  permissions: '0644'
+  content: |
+    {pkgs, ...}:
+    {
+      environment.systemPackages = with pkgs; [ neofetch vim helix ];
+    }
+runcmd:
+  - curl https://raw.githubusercontent.com/elitak/nixos-infect/master/nixos-infect |  NIXOS_IMPORT=./host.nix NIX_CHANNEL=nixos-24.05 bash 2>&1 | tee /tmp/infect.log
+```
+
 #### Test locally
 
 Test the configuration locally before deploying it using
