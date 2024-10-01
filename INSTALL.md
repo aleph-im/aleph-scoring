@@ -128,6 +128,7 @@ service and a Prometheus exporter.
 
 ```shell
 scp nix/service.nix <server>:/etc/nixos/service.nix
+scp nix/aleph-scoring.nix <server>:/etc/nixos/aleph-scoring.nix
 ```
 
 Ensure this file is imported by `/etc/nixos/configuration.nix` or `/etc/nixos/host.nix`
