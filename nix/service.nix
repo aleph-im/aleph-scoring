@@ -40,7 +40,7 @@ in
   swapDevices = [
     {
       device = "/var/lib/swapfile";
-      size = 4 * 1024; # in megabytes
+      size = 2 * 1024; # in megabytes
     }
   ];
 
@@ -58,4 +58,7 @@ in
     enabledCollectors = [ "systemd" ];
     openFirewall = true;
   };
+
+  # Optimize the nix store at every build
+  nix.settings.auto-optimise-store = true;
 }
