@@ -3,7 +3,7 @@
   alephScoring = pkgs.callPackage (pkgs.fetchFromGitHub {
     owner = "aleph-im";
     repo = "aleph-scoring";
-    rev = "b07ac8bc2bfaddd600f949fd5125c64d8e457318";
-    sha256 = "sha256-oSfGZhwAwPC6yzLGysgjyTNaCMH5AC0lcObrPTTcqYw=";
+    rev = "5ae3ad6b4682087cff1c0c1558811359fcb77ab3";
+    sha256 = "sha256-0vAI+DOmF6/Z24iwjzt00EEsoosOis43PSbX5TWE6oo=";
   }) { };
 }
