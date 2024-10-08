@@ -337,7 +337,8 @@ async def get_ccn_metrics(
     # In order to avoid this scenario, each coroutine (specific to one host)
     # waits for a random time (linear distribution) between 0 and 60 minutes
     # (excluding the time to get to this step: update ASN database and fetch node list)
-    delay_seconds: float = (random() * 60 * 60) - seconds_since_process_has_started()
+    margin_to_publish: float = 120  # Allow time to publish the data and not offset the next measurements
+    delay_seconds: float = (random() * 60 * 60) - seconds_since_process_has_started() - margin_to_publish
     logger.debug(
         f"Waiting {delay_seconds} seconds before fetching metrics for {node_info.hash}"
     )
@@ -479,7 +480,8 @@ async def get_crn_metrics(
     # In order to avoid this scenario, each coroutine (specific to one host)
     # waits for a random time (linear distribution) between 0 and 60 minutes.
     # (excluding the time to get to this step: update ASN database and fetch node list)
-    delay_seconds: float = (random() * 60 * 60) - seconds_since_process_has_started()
+    margin_to_publish: float = 120  # Allow time to publish the data and not offset the next measurements
+    delay_seconds: float = (random() * 60 * 60) - seconds_since_process_has_started() - margin_to_publish
     logger.debug(
         f"Waiting {delay_seconds} seconds before fetching metrics for {node_info.hash}"
     )
