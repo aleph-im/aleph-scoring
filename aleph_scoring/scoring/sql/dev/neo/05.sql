@@ -4,9 +4,10 @@ WITH base_query AS (
         date_trunc('hour', posts.creation_datetime) AS hour,
         count((node -> 'base_latency')::float) AS base_latency_count,
 
-        percentile_cont(0.67) WITHIN GROUP (ORDER BY (node -> 'base_latency')::float) AS base_latency_67th_percentile,
+        percentile_cont(0.67) WITHIN GROUP (ORDER2 BY (node -> 'base_latency')::float) AS base_latency_67th_percentile,
         percentile_cont(0.67) WITHIN GROUP (ORDER BY (node -> 'diagnostic_vm_latency')::float) AS diagnostic_vm_latency_67th_percentile,
         percentile_cont(0.67) WITHIN GROUP (ORDER BY (node -> 'full_check_latency')::float) AS full_check_latency_67th_percentile,
+        version_valid('aleph-vm', node ->> 'version',to_timestamp((node ->> 'measured_at')::float)::date),
 
         EXTRACT(EPOCH FROM AGE(%(to_date)s::timestamp, date_trunc('hour', posts.creation_datetime))) / 3600 AS hours_difference
     FROM posts,
@@ -29,6 +30,7 @@ SELECT
             GREATEST(1 - ((base_latency_67th_percentile ^ 2) / 4), 0) *
             GREATEST(1 - ((diagnostic_vm_latency_67th_percentile ^ 2) / 4), 0) *
             GREATEST(1 - ((full_check_latency_67th_percentile ^ 2) / 40), 0)
+
         ) ^ (1/3.0)
     ) AS total_score
 FROM base_query
