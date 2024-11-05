@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, AsyncIterable
 
 import asyncpg
 
@@ -68,15 +68,20 @@ async def query_crn_measurements(
     conn: asyncpg.connection,
     asn_info: Dict,
     period: Period,
-):
-    sql = read_sql_file("query_crn_measurements.template.sql")
+) -> AsyncIterable[Dict[str, CrnMeasurements]]:
+    sql = read_sql_file("dev/neo/query_crn_scores.template.sql")
 
+    p1 = 0.99
+    p2 = 0.999
     values = await conn.fetch(
         sql,
-        settings.ALLOWED_METRICS_SENDER,
-        settings.ALEPH_POST_TYPE_METRICS,
-        period.from_date,
-        period.to_date,
+
+        period.to_date,  # $1
+        period.from_date,  # $2
+        p1,  # $3
+        p2,  # $4
+        settings.ALLOWED_METRICS_SENDER,  # $5
+        settings.ALEPH_POST_TYPE_METRICS,  # $6
     )
 
     for record in values:
@@ -98,76 +103,92 @@ async def compute_crn_scores(
         asn_info,
         period,
     ):
-        # This contains custom logic on the scores
-        performance_score = Score(
-            measurements.base_latency_score_p25
-            * measurements.base_latency_score_p95
-            * measurements.diagnostic_vm_latency_score_p25
-            # Suspend using diagnostic_vm_latency_score_p95 since most nodes
-            # have very bad values
-            # * measurements.diagnostic_vm_latency_score_p95
-            * measurements.full_check_latency_score_p25
-            # Suspend using full_check_latency_score_p95 since most nodes
-            # have very bad values
-            # * measurements.full_check_latency_score_p95
-        ) ** (1 / 4)
+        # # This contains custom logic on the scores
+        # performance_score = Score(
+        #     measurements.base_latency_score_p25
+        #     * measurements.base_latency_score_p95
+        #     * measurements.diagnostic_vm_latency_score_p25
+        #     # Suspend using diagnostic_vm_latency_score_p95 since most nodes
+        #     # have very bad values
+        #     # * measurements.diagnostic_vm_latency_score_p95
+        #     * measurements.full_check_latency_score_p25
+        #     # Suspend using full_check_latency_score_p95 since most nodes
+        #     # have very bad values
+        #     # * measurements.full_check_latency_score_p95
+        # ) ** (1 / 4)
+        #
+        # # This contains custom logic on the scores
+        # performance_score = Score(
+        #     measurements.base_latency_score_p25
+        #     * measurements.base_latency_score_p95
+        #     * measurements.diagnostic_vm_latency_score_p25
+        #     # Suspend using diagnostic_vm_latency_score_p95 since most nodes
+        #     # have very bad values
+        #     # * measurements.diagnostic_vm_latency_score_p95
+        #     * measurements.full_check_latency_score_p25
+        #     # Suspend using full_check_latency_score_p95 since most nodes
+        #     # have very bad values
+        #     # * measurements.full_check_latency_score_p95
+        # ) ** (1 / 4)
+        #
+        # version_score: Score
+        # if not sum(
+        #     (
+        #         measurements.node_version_missing,
+        #         measurements.node_version_latest,
+        #         measurements.node_version_outdated,
+        #         measurements.node_version_obsolete,
+        #         measurements.node_version_other,
+        #         measurements.node_version_prerelease,
+        #     )
+        # ):
+        #     logger.warning(f"No version measurement for node {node_id}")
+        #     version_score = Score(0)
+        # elif (
+        #     measurements.node_version_missing
+        #     > (
+        #         measurements.node_version_latest
+        #         + measurements.node_version_outdated
+        #         + measurements.node_version_obsolete
+        #         + measurements.node_version_other
+        #         + measurements.node_version_prerelease
+        #     )
+        #     / 5
+        # ):
+        #     # Too many missing version metrics.
+        #     version_score = Score(0)
+        # else:
+        #     version_score = Score(
+        #         (
+        #             measurements.node_version_latest
+        #             + measurements.node_version_outdated
+        #             + measurements.node_version_prerelease
+        #         )
+        #         / (
+        #             measurements.node_version_latest
+        #             + measurements.node_version_outdated
+        #             + measurements.node_version_obsolete
+        #             + measurements.node_version_missing
+        #             + measurements.node_version_other
+        #             + measurements.node_version_prerelease
+        #         )
+        #     )
 
-        version_score: Score
-        if not sum(
-            (
-                measurements.node_version_missing,
-                measurements.node_version_latest,
-                measurements.node_version_outdated,
-                measurements.node_version_obsolete,
-                measurements.node_version_other,
-                measurements.node_version_prerelease,
-            )
-        ):
-            logger.warning(f"No version measurement for node {node_id}")
-            version_score = Score(0)
-        elif (
-            measurements.node_version_missing
-            > (
-                measurements.node_version_latest
-                + measurements.node_version_outdated
-                + measurements.node_version_obsolete
-                + measurements.node_version_other
-                + measurements.node_version_prerelease
-            )
-            / 5
-        ):
-            # Too many missing version metrics.
-            version_score = Score(0)
-        else:
-            version_score = Score(
-                (
-                    measurements.node_version_latest
-                    + measurements.node_version_outdated
-                    + measurements.node_version_prerelease
-                )
-                / (
-                    measurements.node_version_latest
-                    + measurements.node_version_outdated
-                    + measurements.node_version_obsolete
-                    + measurements.node_version_missing
-                    + measurements.node_version_other
-                    + measurements.node_version_prerelease
-                )
-            )
+        total_score = Score(
+            measurements.total_score
+        )
 
         decentralization_score = Score(
             (1 - (measurements.nodes_with_identical_asn / measurements.total_nodes))
             ** 2
         )
 
-        total_score = Score((performance_score * version_score) ** (1 / 2))
+        # total_score = Score((performance_score * version_score) ** (1 / 2))
 
         result.append(
             CrnScore(
                 node_id=node_id,
                 total_score=total_score,
-                performance=performance_score,
-                version=version_score,
                 decentralization=decentralization_score,
                 measurements=measurements,
             )
