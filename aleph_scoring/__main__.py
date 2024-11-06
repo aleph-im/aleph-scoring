@@ -268,11 +268,11 @@ def compute_scores(
     #     latest_crn_prerelease,
     # ) = get_latest_github_releases("aleph-im", "aleph-vm")
 
-    # ccn_scores = asyncio.run(
-    #     compute_ccn_scores(
-    #         period=current_period,
-    #     )
-    # )
+    ccn_scores = asyncio.run(
+        compute_ccn_scores(
+            period=current_period,
+        )
+    )
     crn_scores = asyncio.run(
         compute_crn_scores(
             period=current_period,
