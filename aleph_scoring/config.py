@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     )
 
     VERSION_GRACE_PERIOD: timedelta = timedelta(weeks=2)
-    SCORE_METRICS_PERIOD: timedelta = timedelta(days=1)  # TODO: bring back to 2 weeks
+    SCORE_METRICS_PERIOD: timedelta = timedelta(days=2*365)
 
     class Config:
         env_file = ".env"
