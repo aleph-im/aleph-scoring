@@ -73,6 +73,8 @@ async def query_crn_measurements(
 
     p1 = 0.99
     p2 = 0.999
+    p1_ratio = 0.8
+    p2_ratio = 1 - p1_ratio
     values = await conn.fetch(
         sql,
 
@@ -82,6 +84,8 @@ async def query_crn_measurements(
         p2,  # $4
         settings.ALLOWED_METRICS_SENDER,  # $5
         settings.ALEPH_POST_TYPE_METRICS,  # $6
+        p1_ratio,  # $7
+        p2_ratio,  # $8
     )
 
     for record in values:
@@ -250,6 +254,8 @@ async def query_ccn_measurements(
 
     p1 = 0.99
     p2 = 0.999
+    p1_ratio = 0.8
+    p2_ratio = 1 - p1_ratio
     values = await conn.fetch(
         sql,
 
@@ -259,6 +265,8 @@ async def query_ccn_measurements(
         p2,  # $4
         settings.ALLOWED_METRICS_SENDER,  # $5
         settings.ALEPH_POST_TYPE_METRICS,  # $6
+        p1_ratio,  # $7
+        p2_ratio,  # $8
     )
 
     for record in values:

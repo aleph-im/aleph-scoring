@@ -28,9 +28,9 @@ SELECT
     (
         SUM(
             (
-                geometric_pmf($3, CEIL(hours_difference)) * $3
+                geometric_pmf($3, CEIL(hours_difference)) * $7
                 +
-                geometric_pmf($4, CEIL(hours_difference)) * $4
+                geometric_pmf($4, CEIL(hours_difference)) * $8
             ) * (
                 (
                     GREATEST(1 - ((base_latency_67th_percentile ^ 2) / 4), 0) *
