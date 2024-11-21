@@ -40,5 +40,8 @@ WORKDIR /opt/
 
 VOLUME "/srv/asn"
 
+# Test launching the process
+RUN /opt/venv/bin/python -m aleph_scoring --help
+
 ENTRYPOINT ["/opt/venv/bin/python", "-m", "aleph_scoring"]
 CMD ["measure-on-schedule", "--publish"]

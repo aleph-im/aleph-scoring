@@ -26,6 +26,7 @@ dependencies = [
     "typer",
     "schedule",
     "sentry-sdk",
+    "psutil",
     # "tables==3.10.1",
     # "holoviews==1.19.1",
 ]
