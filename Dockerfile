@@ -1,4 +1,4 @@
-FROM python:3.9-slim-bullseye
+FROM python:3.12-slim-bookworm
 
 # GCC is required to compile pyasn, git to install aleph-client with a git tag
 RUN apt-get update && apt-get -y upgrade && apt-get install -y \
@@ -7,26 +7,29 @@ RUN apt-get update && apt-get -y upgrade && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-COPY Pipfile /opt/Pipfile
-COPY Pipfile.lock /opt/Pipfile.lock
-
+# Copy source code as user 'source':
 RUN useradd --create-home source
-RUN mkdir /opt/.venv
-RUN chown source:source /opt/.venv
+RUN mkdir /opt/scoring
+RUN mkdir /opt/venv
+RUN chown source:source /opt/scoring /opt/venv
 
-COPY aleph_scoring/. /opt/aleph_scoring/.
-RUN chown --recursive source:source /opt/aleph_scoring
+COPY ./aleph_scoring /opt/scoring/aleph_scoring
+
+COPY ./pyproject.toml /opt/scoring/pyproject.toml
+COPY .git /opt/scoring/.git
+COPY README.md /opt/scoring/README.md
+
+RUN chown --recursive source:source /opt/scoring
 
 USER source
-#RUN pip install --upgrade pip
-RUN python3 -m venv /opt/aleph_scoring/.venv
-RUN pip install --user pipenv
+RUN python3 -m venv /opt/venv
 
-WORKDIR /opt/
+RUN /opt/venv/bin/pip install --upgrade pip
+RUN /opt/venv/bin/pip install /opt/scoring/
 
-ENV PIPENV_VENV_IN_PROJECT 1
-RUN /home/source/.local/bin/pipenv sync
+WORKDIR /opt/scoring
 
+# Setup a different user that runs the scoring:
 USER root
 RUN useradd --create-home user
 RUN mkdir /exports
@@ -37,5 +40,5 @@ WORKDIR /opt/
 
 VOLUME "/srv/asn"
 
-ENTRYPOINT ["/opt/.venv/bin/python", "-m", "aleph_scoring"]
+ENTRYPOINT ["/opt/venv/bin/python", "-m", "aleph_scoring"]
 CMD ["measure-on-schedule", "--publish"]
