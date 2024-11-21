@@ -26,7 +26,6 @@ from typing import (
 from urllib.parse import urlparse
 
 import aiohttp
-import async_timeout
 import pyasn
 from aleph.sdk import AlephHttpClient
 from aleph_message.models import ItemHash
@@ -138,7 +137,7 @@ async def measure_http_latency(
     expected_status: int = 200,
 ) -> Tuple[Optional[float], Optional[Any]]:
     try:
-        async with async_timeout.timeout(
+        async with asyncio.timeout(
             timeout_seconds + timeout_seconds * 0.3 * random()
         ):
             start = time.time()
@@ -182,7 +181,7 @@ async def get_crn_version(
 ) -> Optional[str]:
     # Retrieve the CRN version from header `server`.
     try:
-        async with async_timeout.timeout(
+        async with asyncio.timeout(
             settings.HTTP_REQUEST_TIMEOUT
             + settings.HTTP_REQUEST_TIMEOUT * 0.3 * random(),
         ):
@@ -450,7 +449,7 @@ async def fetch_supported_features(
     """Fetch the list of features supported by a node."""
     url = f"{node_url}about/usage/system"
     try:
-        async with async_timeout.timeout(
+        async with asyncio.timeout(
             timeout_seconds + timeout_seconds * 0.3 * random()
         ):
             async with session.get(url) as resp:
