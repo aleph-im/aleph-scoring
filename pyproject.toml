@@ -21,6 +21,7 @@ dependencies = [
     # "nbconvert==7.16.4",
     ## "pandas==2.2.2",
     # "pandoc==2.4",
+    "setuptools",
     "pyasn==1.6.2",
     "typer",
     "schedule",
