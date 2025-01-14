@@ -183,7 +183,7 @@ def measure(
         help="Logging level",
     ),
 ):
-    logging.basicConfig(level=LogLevel[log_level])
+    logging.basicConfig(level=LogLevel[log_level].value)
     if publish:
         ensure_private_key_available()
     run_measurements(output=output, publish=publish)
@@ -203,7 +203,7 @@ def measure_on_schedule(
         help="Logging level",
     ),
 ):
-    logging.basicConfig(level=LogLevel[log_level])
+    logging.basicConfig(level=LogLevel[log_level].value)
     if publish:
         ensure_private_key_available()
     compute_scores(output=output, publish=publish, log_level=log_level)
@@ -238,7 +238,7 @@ def measure_n_times(
 ):
     """Measure the performance n times."""
 
-    logging.basicConfig(level=LogLevel[log_level])
+    logging.basicConfig(level=LogLevel[log_level].value)
     if publish:
         ensure_private_key_available()
 
@@ -277,7 +277,7 @@ def compute_scores(
         help="Logging level",
     ),
 ):
-    logging.basicConfig(level=LogLevel[log_level])
+    logging.basicConfig(level=LogLevel[log_level].value)
     if publish:
         ensure_private_key_available()
 
@@ -341,7 +341,7 @@ def compute_on_schedule(
         help="Logging level",
     ),
 ):
-    logging.basicConfig(level=LogLevel[log_level])
+    logging.basicConfig(level=LogLevel[log_level].value)
     if publish:
         ensure_private_key_available()
 

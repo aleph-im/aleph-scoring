@@ -6,7 +6,6 @@ import time
 from datetime import datetime, timezone
 from ipaddress import IPv4Address, IPv6Address, IPv6Network
 from random import random, shuffle
-import psutil
 from typing import (
     Any,
     Awaitable,
@@ -26,6 +25,7 @@ from typing import (
 from urllib.parse import urlparse
 
 import aiohttp
+import psutil
 import pyasn
 from aleph.sdk import AlephHttpClient
 from aleph_message.models import ItemHash
@@ -137,9 +137,7 @@ async def measure_http_latency(
     expected_status: int = 200,
 ) -> Tuple[Optional[float], Optional[Any]]:
     try:
-        async with asyncio.timeout(
-            timeout_seconds + timeout_seconds * 0.3 * random()
-        ):
+        async with asyncio.timeout(timeout_seconds + timeout_seconds * 0.3 * random()):
             start = time.time()
             async with session.get(url) as resp:
                 if resp.status != expected_status:
@@ -336,8 +334,12 @@ async def get_ccn_metrics(
     # In order to avoid this scenario, each coroutine (specific to one host)
     # waits for a random time (linear distribution) between 0 and 60 minutes
     # (excluding the time to get to this step: update ASN database and fetch node list)
-    margin_to_publish: float = 120  # Allow time to publish the data and not offset the next measurements
-    delay_seconds: float = (random() * 60 * 60) - seconds_since_process_has_started() - margin_to_publish
+    margin_to_publish: float = (
+        120  # Allow time to publish the data and not offset the next measurements
+    )
+    delay_seconds: float = (
+        (random() * 60 * 60) - seconds_since_process_has_started() - margin_to_publish
+    )
     logger.debug(
         f"Waiting {delay_seconds} seconds before fetching metrics for {node_info.hash}"
     )
@@ -449,9 +451,7 @@ async def fetch_supported_features(
     """Fetch the list of features supported by a node."""
     url = f"{node_url}about/usage/system"
     try:
-        async with asyncio.timeout(
-            timeout_seconds + timeout_seconds * 0.3 * random()
-        ):
+        async with asyncio.timeout(timeout_seconds + timeout_seconds * 0.3 * random()):
             async with session.get(url) as resp:
                 resp.raise_for_status()
                 system_info_raw = await resp.json()
@@ -479,8 +479,12 @@ async def get_crn_metrics(
     # In order to avoid this scenario, each coroutine (specific to one host)
     # waits for a random time (linear distribution) between 0 and 60 minutes.
     # (excluding the time to get to this step: update ASN database and fetch node list)
-    margin_to_publish: float = 120  # Allow time to publish the data and not offset the next measurements
-    delay_seconds: float = (random() * 60 * 60) - seconds_since_process_has_started() - margin_to_publish
+    margin_to_publish: float = (
+        120  # Allow time to publish the data and not offset the next measurements
+    )
+    delay_seconds: float = (
+        (random() * 60 * 60) - seconds_since_process_has_started() - margin_to_publish
+    )
     logger.debug(
         f"Waiting {delay_seconds} seconds before fetching metrics for {node_info.hash}"
     )
@@ -488,7 +492,7 @@ async def get_crn_metrics(
     logger.debug(f"Done waiting for {node_info.hash}")
 
     url = node_info.url.url
-    measured_at = datetime.utcnow()
+    measured_at = datetime.now(tz=timezone.utc)
 
     asn, as_name = lookup_asn(asn_db, url)
 
@@ -601,7 +605,9 @@ async def collect_node_metrics(
     )
 
 
-async def collect_all_ccn_metrics(node_data: Dict[str, Any]) -> Sequence[CcnMetrics]:
+async def collect_all_ccn_metrics(
+    node_data: Dict[str, Any]
+) -> Sequence[CcnMetrics | BaseException]:
     node_infos = list(get_api_node_urls(node_data))
     shuffle(node_infos)  # Avoid artifacts from the order in the list
     return await collect_node_metrics(
@@ -609,7 +615,9 @@ async def collect_all_ccn_metrics(node_data: Dict[str, Any]) -> Sequence[CcnMetr
     )
 
 
-async def collect_all_crn_metrics(node_data: Dict[str, Any]) -> Sequence[CrnMetrics]:
+async def collect_all_crn_metrics(
+    node_data: Dict[str, Any]
+) -> Sequence[CrnMetrics | BaseException]:
     node_infos = list(get_compute_resource_node_urls(node_data))
     shuffle(node_infos)  # Avoid artifacts from the order in the list
     return await collect_node_metrics(
@@ -678,8 +686,8 @@ async def collect_all_node_metrics() -> NodeMetrics:
         server=ip_address,
         server_asn=asn,
         server_as_name=as_name,
-        ccn=list(ccn_metrics),
-        crn=list(crn_metrics),
+        ccn=list(m for m in ccn_metrics if isinstance(m, CcnMetrics)),
+        crn=list(m for m in crn_metrics if isinstance(m, CrnMetrics)),
     )
 
 
