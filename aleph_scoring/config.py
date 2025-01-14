@@ -40,7 +40,10 @@ class Settings(BaseSettings):
     )
 
     VERSION_GRACE_PERIOD: timedelta = timedelta(weeks=2)
-    SCORE_METRICS_PERIOD: timedelta = timedelta(days=2*365)
+    SCORE_METRICS_PERIOD: timedelta = timedelta(days=2 * 365)
+    # Since the scoring is influenced by the lack of metrics, mostly recent ones,
+    # scoring will not be performed if metrics are older than this threshold.
+    MAX_METRICS_AGE: timedelta = timedelta(hours=3)
 
     class Config:
         env_file = ".env"

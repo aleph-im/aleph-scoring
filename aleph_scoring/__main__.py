@@ -3,7 +3,7 @@ import json
 import logging
 import os
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -20,7 +20,7 @@ from aleph_scoring.metrics import measure_node_performance_sync
 from aleph_scoring.metrics.models import MetricsPost, NodeMetrics
 from aleph_scoring.scoring import compute_ccn_scores, compute_crn_scores
 from aleph_scoring.scoring.models import NodeScores, NodeScoresPost
-from aleph_scoring.utils import LogLevel, Period
+from aleph_scoring.utils import LogLevel, Period, database_connection
 
 logger = logging.getLogger(__name__)
 aleph_account: Optional[ETHAccount] = None
@@ -113,6 +113,37 @@ async def publish_scores_on_aleph(
     logger.info(
         "Published scores on Aleph with status %s: %s", status, scores_post.item_hash
     )
+
+
+async def get_latest_metrics() -> dict:
+    sql = """
+        SELECT 
+            *
+        FROM posts
+        WHERE
+            owner = $1
+            AND type = $2
+        ORDER BY
+            creation_datetime DESC
+        LIMIT 1
+    """
+    conn = await database_connection(settings)
+    messages = await conn.fetch(
+        sql,
+        settings.ALLOWED_METRICS_SENDER,
+        settings.ALEPH_POST_TYPE_METRICS,
+    )
+    # print(messages)
+    return messages[0]
+
+
+async def get_latest_metrics_age(now: datetime) -> timedelta:
+    """
+    Get the age of the most recent metrics from the specified `pyaleph` node.
+    """
+    latest_metrics_message: dict = await get_latest_metrics()
+    creation_datetime: datetime = latest_metrics_message["creation_datetime"]
+    return now - creation_datetime
 
 
 def run_measurements(
@@ -250,23 +281,22 @@ def compute_scores(
     if publish:
         ensure_private_key_available()
 
-    to_date = datetime.utcnow()
+    to_date = datetime.now(tz=timezone.utc)
     from_date = to_date - settings.SCORE_METRICS_PERIOD
     current_period = Period(from_date=from_date, to_date=to_date)
 
     logger.info(
         f"Period = {current_period.from_date.isoformat()} to {current_period.to_date.isoformat()}"
     )
-    # (
-    #     latest_ccn_release,
-    #     previous_ccn_release,
-    #     latest_ccn_prerelease,
-    # ) = get_latest_github_releases("aleph-im", "pyaleph")
-    # (
-    #     latest_crn_release,
-    #     previous_crn_release,
-    #     latest_crn_prerelease,
-    # ) = get_latest_github_releases("aleph-im", "aleph-vm")
+
+    # Ensure that recent metrics are available on the node before computing scores
+    latest_metrics_age: timedelta = asyncio.run(get_latest_metrics_age(to_date))
+    if latest_metrics_age > settings.MAX_METRICS_AGE:
+        logger.error(
+            "The most recent metrics are too old: %s. Check if the node has pending messages.",
+            latest_metrics_age,
+        )
+        raise typer.Exit(2)
 
     ccn_scores = asyncio.run(
         compute_ccn_scores(
