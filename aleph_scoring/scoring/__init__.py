@@ -1,8 +1,8 @@
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, AsyncIterable
+from typing import AsyncIterable, Dict, List
 
 import asyncpg
 
@@ -15,7 +15,7 @@ from aleph_scoring.scoring.models import (
     NodeScores,
     Score,
 )
-from aleph_scoring.utils import Period, database_connection, get_latest_github_releases
+from aleph_scoring.utils import Period, database_connection
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +43,8 @@ async def query_crn_asn_info(
     values = await conn.fetch(
         sql,
         allowed_sender,
-        period.from_date,
-        period.to_date,
+        period.from_date.replace(tzinfo=None),
+        period.to_date.replace(tzinfo=None),
         "crn",
         settings.ALEPH_POST_TYPE_METRICS,
     )
@@ -77,9 +77,8 @@ async def query_crn_measurements(
     p2_ratio = 1 - p1_ratio
     values = await conn.fetch(
         sql,
-
-        period.to_date,  # $1
-        period.from_date,  # $2
+        period.to_date.replace(tzinfo=None),  # $1
+        period.from_date.replace(tzinfo=None),  # $2
         p1,  # $3
         p2,  # $4
         settings.ALLOWED_METRICS_SENDER,  # $5
@@ -180,9 +179,7 @@ async def compute_crn_scores(
         #         )
         #     )
 
-        total_score = Score(
-            measurements.total_score
-        )
+        total_score = Score(measurements.total_score)
 
         decentralization_score = Score(
             (1 - (measurements.nodes_with_identical_asn / measurements.total_nodes))
@@ -224,8 +221,8 @@ async def query_ccn_asn_info(
     values = await conn.fetch(
         sql,
         allowed_sender,
-        period.from_date,
-        period.to_date,
+        period.from_date.replace(tzinfo=None),
+        period.to_date.replace(tzinfo=None),
         "ccn",
         post_type,
     )
@@ -258,9 +255,8 @@ async def query_ccn_measurements(
     p2_ratio = 1 - p1_ratio
     values = await conn.fetch(
         sql,
-
-        period.to_date,  # $1
-        period.from_date,  # $2
+        period.to_date.replace(tzinfo=None),  # $1
+        period.from_date.replace(tzinfo=None),  # $2
         p1,  # $3
         p2,  # $4
         settings.ALLOWED_METRICS_SENDER,  # $5
@@ -346,13 +342,11 @@ async def compute_ccn_scores(
         #         + measurements.node_version_prerelease
         #     )
 
-        total_score = Score(
-            measurements.total_score
-        )
+        total_score = Score(measurements.total_score)
 
         decentralization_score = Score(
-            (1 - (measurements.nodes_with_identical_asn / measurements.total_nodes)
-            ) ** 2
+            (1 - (measurements.nodes_with_identical_asn / measurements.total_nodes))
+            ** 2
         )
 
         # total_score = (performance_score * version_score) ** (1 / 2)
@@ -379,20 +373,9 @@ async def compute_ccn_scores(
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
-    to_date = datetime.utcnow()
+    to_date = datetime.now(tz=timezone.utc)
     from_date = to_date - settings.SCORE_METRICS_PERIOD
     current_period = Period(from_date=from_date, to_date=to_date)
-
-    (
-        latest_ccn_release,
-        previous_ccn_release,
-        latest_ccn_prerelease,
-    ) = get_latest_github_releases("aleph-im", "pyaleph")
-    (
-        latest_crn_release,
-        previous_crn_release,
-        latest_crn_prerelease,
-    ) = get_latest_github_releases("aleph-im", "aleph-vm")
 
     ccn_scores = asyncio.run(
         compute_ccn_scores(
