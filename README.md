@@ -26,3 +26,9 @@ docker-compose up
 ```shell
 jupyter nbconvert --execute Node\ Score\ Analysis.ipynb --to html
 ```
+
+## Run manually
+
+```shell
+python aleph_scoring/__main__.py compute-scores --output scores.json
+```
