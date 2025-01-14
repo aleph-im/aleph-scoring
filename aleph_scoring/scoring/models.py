@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 from pydantic import BaseModel, ConstrainedFloat
 
@@ -50,3 +50,4 @@ class NodeScoresPost(BaseModel):
     tags: List[str]
     period: Period
     scores: NodeScores
+    measured_at: Optional[str] = None  # ISO formatted datetime
