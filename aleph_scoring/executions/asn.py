@@ -35,7 +35,7 @@ def ftp_download(server: Server, remote_dir: str, remote_file: str, local_file: 
         ftp.cwd(remote_dir)
         logger.debug("Downloading ftp://%s/%s/%s", server, remote_dir, remote_file)
         filesize = ftp.size(remote_file)
-        # perhaps warn before an overwriting file?
+        # perhaps warn before overwriting file?
         local_file.parent.mkdir(parents=True, exist_ok=True)
         with local_file.open("wb") as fp:
 

@@ -14,8 +14,10 @@ from aleph.sdk.chains.ethereum import ETHAccount
 from aleph.sdk.client import AuthenticatedAlephHttpClient
 from aleph.sdk.types import Account
 from hexbytes import HexBytes
+from pydantic import BaseModel
 
 from aleph_scoring.config import settings
+from aleph_scoring.executions import record_node_executions, record_node_executions_sync
 from aleph_scoring.metrics import measure_node_performance_sync
 from aleph_scoring.metrics.models import MetricsPost, NodeMetrics
 from aleph_scoring.scoring import compute_ccn_scores, compute_crn_scores
@@ -28,7 +30,7 @@ aleph_account: Optional[ETHAccount] = None
 app = typer.Typer()
 
 
-def save_as_json(node_metrics: NodeMetrics, file: Path):
+def save_as_json(node_metrics: BaseModel, file: Path):
     with file.open(mode="w") as f:
         f.write(node_metrics.json(indent=4))
 
@@ -187,6 +189,39 @@ def measure(
     if publish:
         ensure_private_key_available()
     run_measurements(output=output, publish=publish)
+
+
+@app.command()
+def record_executions(
+        output: Optional[Path] = typer.Option(
+            default=None, help="Path where to save the result in JSON format."
+        ),
+        publish: bool = typer.Option(
+            default=False,
+            help="Publish the results on Aleph.",
+        ),
+        stdout: bool = typer.Option(default=False, help="Print the result on stdout"),
+        log_level: str = typer.Option(
+            default=LogLevel.INFO.name,
+            help="Logging level",
+        ),
+):
+    logging.basicConfig(level=LogLevel[log_level].value)
+    if publish:
+        ensure_private_key_available()
+
+    node_executions = record_node_executions_sync()
+
+    if output:
+        save_as_json(node_metrics=node_executions, file=output)
+    if stdout:
+        print(node_executions.json(indent=4))
+    if publish:
+        account = get_aleph_account()
+        asyncio.run(
+            publish_metrics_on_aleph(account=account, node_metrics=node_executions)
+        )
+
 
 
 @app.command()
