@@ -11,7 +11,6 @@ from typing import (
     Dict,
     Generator,
     Iterable,
-    List,
     Literal,
     NewType,
     Optional,
@@ -38,6 +37,17 @@ from aleph_scoring.metrics import seconds_since_process_has_started
 
 logger = logging.getLogger(__name__)
 
+# Remove known test and diagnostic VMs
+VM_TO_IGNORES = [
+    # Test hash VMs
+    "fake_vm_fake_vm_fake_vm_fake_vm_fake_vm_fake_vm_fake_vm_fake_vm_",
+    "cafecafecafecafecafecafecafecafecafecafecafecafecafecafecafecafe",
+    "decadecadecadecadecadecadecadecadecadecadecadecadecadecadecadeca",
+    # Diagnostic VM
+    "63faf8b5db1cf8d965e6a464a0cb8062af8e7df131729e48738342d956f29ace",
+    "67705389842a0a1b95eaa408b009741027964edc805997475e95c505d642edd8",
+
+]
 # Global variable used to aggregate the executions over time
 ExecutionsLogKey = Literal["core_channel_nodes", "compute_resource_nodes"]
 
@@ -169,7 +179,7 @@ async def measure_http_latency(
 
 async def fetch_crn_executions(
     session: aiohttp.ClientSession, node_url: str
-) -> Optional[str]:
+) -> Optional[dict[str, Any]]:
     try:
         async with asyncio.timeout(
             settings.HTTP_REQUEST_TIMEOUT
@@ -225,6 +235,15 @@ async def get_crn_executions(
     ) as session:
         executions = await fetch_crn_executions(session=session, node_url=url + 'v2/about/executions/list')
 
+        if executions is not None:
+            filtered_executions = {}
+            for execution_hash,execution in executions.items():
+                if executions not in VM_TO_IGNORES:
+                    filtered_executions[execution_hash] = execution
+        else:
+            filtered_executions = executions
+
+
 
     # TODO filter diagnostic VM
     # TODO add a Model for the execution
@@ -234,7 +253,7 @@ async def get_crn_executions(
         node_id=node_info.hash,
         url=url,
         asn=None,
-        executions=executions,
+        executions=filtered_executions,
     )
 
 
