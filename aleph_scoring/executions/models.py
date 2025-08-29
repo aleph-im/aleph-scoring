@@ -27,12 +27,12 @@ class MappedPort(BaseModel):
 
 
 class Networking(BaseModel):
-    ipv4_network: str
-    host_ipv4: str
-    ipv6_network: str
-    ipv6_ip: str
-    ipv4_ip: str
-    mapped_ports: Dict[str, MappedPort]
+    ipv4_network: str | None
+    host_ipv4: str | None
+    ipv6_network: str | None
+    ipv6_ip: str | None
+    ipv4_ip: str | None
+    mapped_ports: Dict[str, MappedPort] | None
 
 
 class ExecutionStatus(BaseModel):
@@ -52,8 +52,8 @@ class Execution(BaseModel):
 
 
 class CrnExecutions(AlephNodeExecutions):
-    executions: Dict[str, Execution] = Field(
-        description="List of executions on the node"
+    executions: Dict[str, Execution] | None = Field(default=None,
+        description="List of executions on the node",
     )
 
 
@@ -70,5 +70,4 @@ class NodeExecutions(BaseModel):
 class ExecutionsPost(BaseModel):
     version: str = "1.0"
     tags: List[str]
-    # ethereum_height: str
     executions: NodeExecutions
