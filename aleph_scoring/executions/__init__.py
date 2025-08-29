@@ -28,7 +28,6 @@ from urllib3.util import Url, parse_url
 from aleph_scoring.config import settings
 from aleph_scoring.executions.models import (
     AlephNodeExecutions,
-    CcnExecutions,
     CrnExecutions,
     NodeExecutions,
 )
@@ -45,7 +44,6 @@ VM_TO_IGNORES = [
     # Diagnostic VM
     "63faf8b5db1cf8d965e6a464a0cb8062af8e7df131729e48738342d956f29ace",
     "67705389842a0a1b95eaa408b009741027964edc805997475e95c505d642edd8",
-
 ]
 # Global variable used to aggregate the executions over time
 ExecutionsLogKey = Literal["core_channel_nodes", "compute_resource_nodes"]
@@ -232,17 +230,17 @@ async def get_crn_executions(
             limit_per_host=20,
         ),
     ) as session:
-        executions = await fetch_crn_executions(session=session, node_url=url + 'v2/about/executions/list')
+        executions = await fetch_crn_executions(
+            session=session, node_url=url + "v2/about/executions/list"
+        )
 
         if executions is not None:
             filtered_executions = {}
-            for execution_hash,execution in executions.items():
+            for execution_hash, execution in executions.items():
                 if executions not in VM_TO_IGNORES:
                     filtered_executions[execution_hash] = execution
         else:
             filtered_executions = executions
-
-
 
     # TODO filter diagnostic VM
     # TODO add a Model for the execution
@@ -272,7 +270,6 @@ async def collect_node_executions(
     )
 
 
-
 async def collect_all_crn_executions(
     node_data: Dict[str, Any]
 ) -> Sequence[CrnExecutions | BaseException]:
@@ -297,6 +294,7 @@ async def get_aleph_nodes() -> Dict:
 def is_valid_ip4(ip: str) -> bool:
     return bool(re.match(r"\d+\.\d+\.\d+\.\d+", ip))
 
+
 async def get_ip4_from_service() -> str:
     """Get the public IPv4 of this system by calling a third-party service"""
     for ip4_service_url in IP4_SERVICE_URLS:
@@ -309,15 +307,12 @@ async def get_ip4_from_service() -> str:
                     if is_valid_ip4(ip):
                         return ip
                     else:
-                        raise ValueError(
-                            f"Response does not match IPv4 format: {ip}"
-                        )
+                        raise ValueError(f"Response does not match IPv4 format: {ip}")
         except aiohttp.ClientConnectorError as error:
             logger.warning(f"Could not connect to {ip4_service_url}: {error}")
             continue
     else:
         raise ValueError("Could not determine public IPv4 address")
-
 
 
 async def collect_all_node_executions() -> NodeExecutions:
@@ -331,7 +326,6 @@ async def collect_all_node_executions() -> NodeExecutions:
     # CRN and CRN executions are measured concurrently since they are randomly
     # scheduled over the next hour usinc `asyncio.sleep` in each node coroutine.
     (crn_executions,) = await asyncio.gather(
-        
         collect_all_crn_executions(aleph_nodes),
     )
     logger.debug("Fetched node executions")

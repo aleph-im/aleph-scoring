@@ -1,5 +1,5 @@
-from typing import List, Optional, Dict
 from datetime import datetime
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -8,7 +8,6 @@ class AlephNodeExecutions(BaseModel):
     measured_at: float
     node_id: str
     url: str
-
 
 
 class CcnExecutions(AlephNodeExecutions):
@@ -52,7 +51,8 @@ class Execution(BaseModel):
 
 
 class CrnExecutions(AlephNodeExecutions):
-    executions: Dict[str, Execution] | None = Field(default=None,
+    executions: Dict[str, Execution] | None = Field(
+        default=None,
         description="List of executions on the node",
     )
 
