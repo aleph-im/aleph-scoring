@@ -1,4 +1,5 @@
-from typing import List, Optional
+from typing import List, Optional, Dict
+from datetime import datetime
 
 from pydantic import BaseModel, Field
 
@@ -7,12 +8,7 @@ class AlephNodeExecutions(BaseModel):
     measured_at: float
     node_id: str
     url: str
-    # asn: Optional[int]
-    # as_name: Optional[str]
-    # version: Optional[str]
-    # days_outdated: Optional[int] = None  # TODO
-    # base_latency: Optional[float]
-    # base_latency_ipv4: Optional[float]
+
 
 
 class CcnExecutions(AlephNodeExecutions):
@@ -24,9 +20,40 @@ class CcnExecutions(AlephNodeExecutions):
     eth_height_remaining: Optional[int]
 
 
+class MappedPort(BaseModel):
+    host: int
+    tcp: bool
+    udp: bool
+
+
+class Networking(BaseModel):
+    ipv4_network: str
+    host_ipv4: str
+    ipv6_network: str
+    ipv6_ip: str
+    ipv4_ip: str
+    mapped_ports: Dict[str, MappedPort]
+
+
+class ExecutionStatus(BaseModel):
+    defined_at: datetime
+    preparing_at: Optional[datetime] = None
+    prepared_at: Optional[datetime] = None
+    starting_at: Optional[datetime] = None
+    started_at: Optional[datetime] = None
+    stopping_at: Optional[datetime] = None
+    stopped_at: Optional[datetime] = None
+
+
+class Execution(BaseModel):
+    networking: Networking
+    status: ExecutionStatus
+    running: bool | None = None
+
+
 class CrnExecutions(AlephNodeExecutions):
-    executions: dict| None = Field(
-        default_factory=list, description="List of executions on the node"
+    executions: Dict[str, Execution] = Field(
+        description="List of executions on the node"
     )
 
 
