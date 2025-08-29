@@ -53,9 +53,8 @@ class Execution(BaseModel):
 
 
 class CrnExecutions(AlephNodeExecutions):
-    executions: Dict[str, Execution] | None = Field(
-        default=None,
-        description="List of executions on the node",
+    executions: dict| None = Field(
+        default_factory=list, description="List of executions on the node"
     )
 
 
