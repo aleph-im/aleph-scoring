@@ -20,6 +20,7 @@ class Settings(BaseSettings):
 
     ALEPH_POST_TYPE_CHANNEL: Optional[str] = "aleph-scoring"
     ALEPH_POST_TYPE_METRICS: str = "aleph-network-metrics"
+    ALEPH_POST_TYPE_EXECUTIONS: str = "aleph-network-executions"
     ALEPH_POST_TYPE_SCORES: str = "aleph-scoring-scores"
     ASN_DB_DIRECTORY: Path = Path(__file__).parent.parent / "asn"
     ASN_DB_REFRESH_PERIOD_DAYS: int = 1

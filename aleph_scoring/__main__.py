@@ -17,7 +17,8 @@ from hexbytes import HexBytes
 from pydantic import BaseModel
 
 from aleph_scoring.config import settings
-from aleph_scoring.executions import record_node_executions, record_node_executions_sync
+from aleph_scoring.executions import record_node_executions, record_node_executions_sync, CrnExecutions
+from aleph_scoring.executions.models import ExecutionsPost, NodeExecutions
 from aleph_scoring.metrics import measure_node_performance_sync
 from aleph_scoring.metrics.models import MetricsPost, NodeMetrics
 from aleph_scoring.scoring import compute_ccn_scores, compute_crn_scores
@@ -190,6 +191,23 @@ def measure(
         ensure_private_key_available()
     run_measurements(output=output, publish=publish)
 
+async def publish_executions_on_aleph(account: Account, node_executions: NodeExecutions):
+    channel = settings.ALEPH_POST_TYPE_CHANNEL
+    aleph_api_server = settings.NODE_DATA_HOST
+
+    metrics_post_data = ExecutionsPost(tags=["mainnet"], metrics=node_executions)
+    async with AuthenticatedAlephHttpClient(
+            account=account, api_server=aleph_api_server
+    ) as client:
+        metrics_post, status = await client.create_post(
+            post_content=metrics_post_data,
+            post_type=settings.ALEPH_POST_TYPE_EXECUTIONS,
+            channel=channel,
+        )
+    logger.info(
+        "Published executions on Aleph with status %s: %s", status, metrics_post.item_hash
+    )
+
 
 @app.command()
 def record_executions(
@@ -219,7 +237,7 @@ def record_executions(
     if publish:
         account = get_aleph_account()
         asyncio.run(
-            publish_metrics_on_aleph(account=account, node_metrics=node_executions)
+            publish_executions_on_aleph(account=account, node_executions=node_executions)
         )
 
 
