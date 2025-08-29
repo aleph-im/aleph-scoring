@@ -26,7 +26,6 @@ from pydantic import BaseModel, validator
 from urllib3.util import Url, parse_url
 
 from aleph_scoring.config import settings
-from aleph_scoring.executions.asn import get_asn_database
 from aleph_scoring.executions.models import (
     AlephNodeExecutions,
     CcnExecutions,
