@@ -277,8 +277,9 @@ async def collect_all_crn_executions(
     node_data: Dict[str, Any]
 ) -> Sequence[CrnExecutions | BaseException]:
     node_infos = list(get_compute_resource_node_urls(node_data))
-    node_infos = [node for node in node_infos if "leviathan" in node.url.url]
-    node_infos = node_infos[:10]
+    # Uncomment during testing to run faster with less node
+    # node_infos = [node for node in node_infos if "leviathan" in node.url.url]
+    # node_infos = node_infos[:10]
     shuffle(node_infos)  # Avoid artifacts from the order in the list
     return await collect_node_executions(
         node_infos=node_infos, executions_function=get_crn_executions
