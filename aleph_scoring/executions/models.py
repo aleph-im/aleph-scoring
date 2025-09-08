@@ -1,6 +1,5 @@
 from datetime import datetime
-from typing import Dict, List, Optional, Dict
-from datetime import datetime
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -53,7 +52,7 @@ class Execution(BaseModel):
 
 
 class CrnExecutions(AlephNodeExecutions):
-    executions: dict| None = Field(
+    executions: dict | None = Field(
         default_factory=list, description="List of executions on the node"
     )
 

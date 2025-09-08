@@ -12,7 +12,6 @@ from typing import (
     Generator,
     Iterable,
     Literal,
-    NewType,
     Optional,
     Sequence,
     Tuple,
@@ -62,7 +61,7 @@ IP4_SERVICE_URLS = ["https://v4.ident.me/", "https://api.ipify.org/"]
 CRN_DIAGNOSTIC_VM_PATH = "{url}vm/" + settings.DIAGNOSTIC_VM_ITEM_HASH
 
 
-TimeoutGenerator = NewType("TimeoutGenerator", Callable[[], aiohttp.ClientTimeout])
+TimeoutGenerator = Callable[[], aiohttp.ClientTimeout]
 
 
 def timeout_generator(
@@ -71,13 +70,11 @@ def timeout_generator(
     def randomize(value: float) -> float:
         return value + value * 0.3 * random()
 
-    return TimeoutGenerator(
-        lambda: aiohttp.ClientTimeout(
-            total=randomize(total),
-            connect=randomize(connect),
-            sock_connect=randomize(sock_connect),
-            sock_read=randomize(sock_read),
-        )
+    return lambda: aiohttp.ClientTimeout(
+        total=randomize(total),
+        connect=randomize(connect),
+        sock_connect=randomize(sock_connect),
+        sock_read=randomize(sock_read),
     )
 
 
@@ -233,6 +230,8 @@ async def get_crn_executions(
         executions = await fetch_crn_executions(
             session=session, node_url=url + "v2/about/executions/list"
         )
+
+        filtered_executions: None | dict
 
         if executions is not None:
             filtered_executions = {}

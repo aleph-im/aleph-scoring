@@ -62,7 +62,7 @@ IP4_SERVICE_URLS = ["https://v4.ident.me/", "https://api.ipify.org/"]
 CRN_DIAGNOSTIC_VM_PATH = "{url}vm/" + settings.DIAGNOSTIC_VM_ITEM_HASH
 
 
-TimeoutGenerator = NewType("TimeoutGenerator", Callable[[], aiohttp.ClientTimeout])
+TimeoutGenerator = Callable[[], aiohttp.ClientTimeout]
 
 
 def timeout_generator(
@@ -71,13 +71,11 @@ def timeout_generator(
     def randomize(value: float) -> float:
         return value + value * 0.3 * random()
 
-    return TimeoutGenerator(
-        lambda: aiohttp.ClientTimeout(
-            total=randomize(total),
-            connect=randomize(connect),
-            sock_connect=randomize(sock_connect),
-            sock_read=randomize(sock_read),
-        )
+    return lambda: aiohttp.ClientTimeout(
+        total=randomize(total),
+        connect=randomize(connect),
+        sock_connect=randomize(sock_connect),
+        sock_read=randomize(sock_read),
     )
 
 
@@ -335,12 +333,11 @@ async def get_ccn_metrics(
     # waits for a random time (linear distribution) between 0 and 60 minutes
     # (excluding the time to get to this step: update ASN database and fetch node list)
     margin_to_publish: float = (
-        1  # Allow time to publish the data and not offset the next measurements
+        120  # Allow time to publish the data and not offset the next measurements
     )
     delay_seconds: float = (
         (random() * 60 * 60) - seconds_since_process_has_started() - margin_to_publish
     )
-    delay_seconds: float = 0
     logger.debug(
         f"Waiting {delay_seconds} seconds before fetching metrics for {node_info.hash}"
     )
@@ -533,11 +530,10 @@ async def get_crn_metrics(
         )[0]
 
         if diagnostic_vm_latency is not None:
-            diagnostic_vm_ping_latency = 0
-            # diagnostic_vm_ping_latency = await ping_vm(
-            #     crn_url=node_info.url.url,
-            #     vm_hash=ItemHash(settings.DIAGNOSTIC_VM_ITEM_HASH),
-            # )
+            diagnostic_vm_ping_latency = await ping_vm(
+                crn_url=node_info.url.url,
+                vm_hash=ItemHash(settings.DIAGNOSTIC_VM_ITEM_HASH),
+            )
         else:
             logger.debug("Could not start diagnostic VM, skipping IPv6 ping check")
             diagnostic_vm_ping_latency = None
@@ -610,7 +606,7 @@ async def collect_node_metrics(
 async def collect_all_ccn_metrics(
     node_data: Dict[str, Any]
 ) -> Sequence[CcnMetrics | BaseException]:
-    node_infos = list(list(get_api_node_urls(node_data))[:10])
+    node_infos = list(get_api_node_urls(node_data))
     shuffle(node_infos)  # Avoid artifacts from the order in the list
     return await collect_node_metrics(
         node_infos=node_infos, metrics_function=get_ccn_metrics
@@ -622,7 +618,6 @@ async def collect_all_crn_metrics(
 ) -> Sequence[CrnMetrics | BaseException]:
     node_infos = list(get_compute_resource_node_urls(node_data))
     shuffle(node_infos)  # Avoid artifacts from the order in the list
-    return []
     return await collect_node_metrics(
         node_infos=node_infos, metrics_function=get_crn_metrics
     )
