@@ -15,7 +15,6 @@ from typing import (
     Iterable,
     List,
     Literal,
-    NewType,
     Optional,
     Sequence,
     Tuple,

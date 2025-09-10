@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import re
-import time
 from datetime import datetime, timezone
 from random import random, shuffle
 from typing import (
@@ -14,7 +13,6 @@ from typing import (
     Literal,
     Optional,
     Sequence,
-    Tuple,
     TypeVar,
     Union,
 )
@@ -52,30 +50,8 @@ CCN_AGGREGATE_PATH = (
     "?keys=corechannel"
 )
 
-CCN_FILE_DOWNLOAD_PATH = (
-    "{url}api/v0/storage/raw/"
-    "50645d4ccfddb7540e7bb17ffa5609ec8a980e588e233f0e2c4451f6f9da6ebd"
-)
 
 IP4_SERVICE_URLS = ["https://v4.ident.me/", "https://api.ipify.org/"]
-CRN_DIAGNOSTIC_VM_PATH = "{url}vm/" + settings.DIAGNOSTIC_VM_ITEM_HASH
-
-
-TimeoutGenerator = Callable[[], aiohttp.ClientTimeout]
-
-
-def timeout_generator(
-    total: float, connect: float, sock_connect: float, sock_read: float
-) -> TimeoutGenerator:
-    def randomize(value: float) -> float:
-        return value + value * 0.3 * random()
-
-    return lambda: aiohttp.ClientTimeout(
-        total=randomize(total),
-        connect=randomize(connect),
-        sock_connect=randomize(sock_connect),
-        sock_read=randomize(sock_read),
-    )
 
 
 class NodeInfo(BaseModel):
@@ -125,52 +101,6 @@ def get_compute_resource_node_urls(
             )
 
 
-async def measure_http_latency(
-    session: aiohttp.ClientSession,
-    url: str,
-    timeout_seconds=settings.HTTP_REQUEST_TIMEOUT,
-    return_output: bool = False,
-    return_json: bool = True,
-    expected_status: int = 200,
-) -> Tuple[Optional[float], Optional[Any]]:
-    try:
-        async with asyncio.timeout(timeout_seconds + timeout_seconds * 0.3 * random()):
-            start = time.time()
-            async with session.get(url) as resp:
-                if resp.status != expected_status:
-                    raise aiohttp.ClientResponseError(
-                        resp.request_info,
-                        resp.history,
-                        status=resp.status,
-                        message="Wrong status code",
-                    )
-                if return_output:
-                    if return_json:
-                        output = await resp.json()
-                    else:
-                        output = await resp.text()
-                    end = time.time()
-                    logger.debug(f"Success when fetching {url}")
-                    return end - start, output
-                else:
-                    await resp.release()
-                    end = time.time()
-                    logger.debug(f"Success when fetching {url}")
-                    return end - start, None
-    except aiohttp.ClientResponseError:
-        logger.debug(f"Client error when fetching {url}")
-        return None, None
-    except aiohttp.ClientConnectorError:
-        logger.debug(f"Connection error when fetching {url}")
-        return None, None
-    except aiohttp.ServerDisconnectedError:
-        logger.debug(f"Server error when fetching {url}")
-        return None, None
-    except asyncio.TimeoutError:
-        logger.debug(f"Timeout error when fetching {url}")
-        return None, None
-
-
 async def fetch_crn_executions(
     session: aiohttp.ClientSession, node_url: str
 ) -> Optional[dict[str, Any]]:
@@ -192,7 +122,7 @@ async def fetch_crn_executions(
 
 
 async def get_crn_executions(
-    timeout_generator: TimeoutGenerator, node_info: NodeInfo
+    timeout: aiohttp.ClientTimeout, node_info: NodeInfo
 ) -> CrnExecutions:
     """Fetch or measure the executions of a Core Channel Node."""
     # Starting to call all the nodes at the same time can cause issues, in particular:
@@ -219,7 +149,7 @@ async def get_crn_executions(
     measured_at = datetime.now(tz=timezone.utc)
 
     async with aiohttp.ClientSession(
-        timeout=timeout_generator(),
+        timeout=timeout,
         connector=aiohttp.TCPConnector(
             # family=socket.AF_INET6,
             keepalive_timeout=300,
@@ -241,9 +171,6 @@ async def get_crn_executions(
         else:
             filtered_executions = executions
 
-    # TODO filter diagnostic VM
-    # TODO add a Model for the execution
-
     return CrnExecutions(
         measured_at=measured_at.timestamp(),
         node_id=node_info.hash,
@@ -258,10 +185,9 @@ M = TypeVar("M", bound=AlephNodeExecutions)
 
 async def collect_node_executions(
     node_infos: Iterable[NodeInfo],
-    executions_function: Callable[[TimeoutGenerator, NodeInfo], Awaitable[M]],
+    executions_function: Callable[[aiohttp.ClientTimeout, NodeInfo], Awaitable[M]],
 ) -> Sequence[Union[M, BaseException]]:
-    # asn_db = get_asn_database()
-    timeout = timeout_generator(
+    timeout = aiohttp.ClientTimeout(
         total=60.0, connect=10.0, sock_connect=10.0, sock_read=60.0
     )
     return await asyncio.gather(

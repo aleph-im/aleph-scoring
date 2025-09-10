@@ -10,7 +10,6 @@ class AlephNodeExecutions(BaseModel):
     url: str
 
 
-
 class CcnExecutions(AlephNodeExecutions):
     Executions_latency: Optional[float]
     aggregate_latency: Optional[float]
