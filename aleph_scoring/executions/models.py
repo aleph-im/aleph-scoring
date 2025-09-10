@@ -58,9 +58,6 @@ class CrnExecutions(AlephNodeExecutions):
 
 class NodeExecutions(BaseModel):
     server: str
-    # server_asn: int
-    # server_as_name: str
-    # ccn: List[CcnExecutions]
     crn: List[CrnExecutions] = Field(
         default_factory=list, description="List of executions per node"
     )
