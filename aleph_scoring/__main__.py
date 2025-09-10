@@ -198,7 +198,7 @@ async def publish_executions_on_aleph(
     channel = settings.ALEPH_POST_TYPE_CHANNEL
     aleph_api_server = settings.NODE_DATA_HOST
 
-    metrics_post_data = ExecutionsPost(tags=["mainnet"], metrics=node_executions)
+    metrics_post_data = ExecutionsPost(tags=["mainnet"], executions=node_executions)
     async with AuthenticatedAlephHttpClient(
         account=account, api_server=aleph_api_server
     ) as client:

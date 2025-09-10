@@ -257,7 +257,6 @@ async def collect_all_node_executions() -> NodeExecutions:
 
     return NodeExecutions(
         server=ip_address,
-        # crn=list(m for m in crn_executions if isinstance(m, CrnExecutions)),
         crn=list(crn_executions),
     )
 
