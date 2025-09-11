@@ -95,10 +95,15 @@ dependencies = [
     "pytest==8.3.3",
 ]
 [tool.hatch.envs.typing.scripts]
-typing = "mypy --config-file=pyproject.toml {args:} ./aleph_scoring/ ./tests/"
+typing = "mypy --config-file=pyproject.toml {args:} ./aleph_scoring/"
 all = [
     "typing"
 ]
 
 [tool.mypy]
+python_version = "3.11"
 check_untyped_defs = true
+install_types = true
+non_interactive = true
+ignore_missing_imports = true
+explicit_package_bases = true

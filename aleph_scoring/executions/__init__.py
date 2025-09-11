@@ -175,7 +175,6 @@ async def get_crn_executions(
         measured_at=measured_at.timestamp(),
         node_id=node_info.hash,
         url=url,
-        asn=None,
         executions=filtered_executions,
     )
 
@@ -253,11 +252,12 @@ async def collect_all_node_executions() -> NodeExecutions:
     (crn_executions,) = await asyncio.gather(
         collect_all_crn_executions(aleph_nodes),
     )
+
     logger.debug("Fetched node executions")
 
     return NodeExecutions(
         server=ip_address,
-        crn=list(crn_executions),
+        crn=list(m for m in crn_executions if isinstance(m, CrnExecutions)),
     )
 
 
