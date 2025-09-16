@@ -412,6 +412,12 @@ def compute_on_schedule(
         publish=publish,
         log_level=log_level,
     )
+    schedule.every(settings.DAEMON_MODE_PERIOD_HOURS).hours.at(":30").do(
+        record_executions,
+        save=output,
+        publish=publish,
+        log_level=log_level,
+    )
 
     logger.debug("Running the scheduler")
     while True:
