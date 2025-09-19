@@ -70,19 +70,6 @@ class NodeInfo(BaseModel):
         return v
 
 
-def get_api_node_urls(raw_data: Dict[str, Any]) -> Generator[NodeInfo, None, None]:
-    """Extract CCN urls from node data."""
-    for node in raw_data["nodes"]:
-        multiaddress = node["multiaddress"]
-        match = re.findall(r"/ip4/([\d\\.]+)/.*", multiaddress)
-        if match:
-            ip = match[0]
-            yield NodeInfo(
-                url=parse_url(f"http://{ip}:4024/"),
-                hash=node["hash"],
-            )
-
-
 def get_compute_resource_node_urls(
     raw_data: Dict[str, Any]
 ) -> Generator[NodeInfo, None, None]:
@@ -105,10 +92,7 @@ async def fetch_crn_executions(
     session: aiohttp.ClientSession, node_url: str
 ) -> Optional[dict[str, Any]]:
     try:
-        async with asyncio.timeout(
-            settings.HTTP_REQUEST_TIMEOUT
-            + settings.HTTP_REQUEST_TIMEOUT * 0.3 * random(),
-        ):
+        async with asyncio.timeout(settings.HTTP_REQUEST_TIMEOUT):
             async with session.get(node_url) as resp:
                 r = await resp.json()
                 return r
