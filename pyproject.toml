@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "aleph-scoring"
 dynamic = ["version"]
 description = "Aleph Scoring Project"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 readme = "README.md"
 
 dependencies = [
@@ -101,7 +101,7 @@ all = [
 ]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 check_untyped_defs = true
 install_types = true
 non_interactive = true
