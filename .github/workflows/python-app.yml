@@ -20,7 +20,10 @@ jobs:
         python3 -m pip install hatch hatch-vcs
     - name: Run hatch linting checks
       run: |
-        hatch run linting:all
+       hatch run linting:ruff check ./aleph_scoring/ ./tests/
+       hatch run linting:black --check --diff  ./aleph_scoring/ ./tests/
+       hatch run linting:isort --check-only --profile black {args:} ./aleph_scoring/ ./tests/
+#        hatch run linting:all
     - name: Typing check
       run: |
         hatch run typing:typing
