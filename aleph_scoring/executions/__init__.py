@@ -71,7 +71,7 @@ class NodeInfo(BaseModel):
 
 
 def get_compute_resource_node_urls(
-    raw_data: Dict[str, Any]
+    raw_data: Dict[str, Any],
 ) -> Generator[NodeInfo, None, None]:
     """Extract CRN node urls the node data."""
     for node in raw_data["resource_nodes"]:
@@ -179,7 +179,7 @@ async def collect_node_executions(
 
 
 async def collect_all_crn_executions(
-    node_data: Dict[str, Any]
+    node_data: Dict[str, Any],
 ) -> Sequence[CrnExecutions | BaseException]:
     node_infos = list(get_compute_resource_node_urls(node_data))
     # Uncomment during testing to run faster with less node

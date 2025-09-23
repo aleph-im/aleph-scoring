@@ -108,7 +108,7 @@ def get_api_node_urls(raw_data: Dict[str, Any]) -> Generator[NodeInfo, None, Non
 
 
 def get_compute_resource_node_urls(
-    raw_data: Dict[str, Any]
+    raw_data: Dict[str, Any],
 ) -> Generator[NodeInfo, None, None]:
     """Extract CRN node urls the node data."""
     for node in raw_data["resource_nodes"]:
@@ -603,7 +603,7 @@ async def collect_node_metrics(
 
 
 async def collect_all_ccn_metrics(
-    node_data: Dict[str, Any]
+    node_data: Dict[str, Any],
 ) -> Sequence[CcnMetrics | BaseException]:
     node_infos = list(get_api_node_urls(node_data))
     shuffle(node_infos)  # Avoid artifacts from the order in the list
@@ -613,7 +613,7 @@ async def collect_all_ccn_metrics(
 
 
 async def collect_all_crn_metrics(
-    node_data: Dict[str, Any]
+    node_data: Dict[str, Any],
 ) -> Sequence[CrnMetrics | BaseException]:
     node_infos = list(get_compute_resource_node_urls(node_data))
     shuffle(node_infos)  # Avoid artifacts from the order in the list

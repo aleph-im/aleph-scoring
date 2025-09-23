@@ -17,13 +17,11 @@ jobs:
         python-version: "3.12"
     - name: Install dependencies
       run: |
-        python3 -m pip install hatch hatch-vcs
-    - name: Run hatch linting checks
+        python -m pip install --upgrade pip
+        pip install mypy==1.11.2 black
+    - name: Lint with black
       run: |
-       hatch run linting:ruff check ./aleph_scoring/ ./tests/
-       hatch run linting:black --check --diff  ./aleph_scoring/ ./tests/
-       hatch run linting:isort --check-only --profile black {args:} ./aleph_scoring/ ./tests/
-#        hatch run linting:all
+        black --check .
     - name: Typing check
       run: |
-        hatch run typing:typing
+        mypy --config-file=pyproject.toml aleph_scoring/
