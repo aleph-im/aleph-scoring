@@ -150,7 +150,7 @@ async def get_crn_executions(
         if executions is not None:
             filtered_executions = {}
             for execution_hash, execution in executions.items():
-                if executions not in VM_TO_IGNORES:
+                if execution_hash not in VM_TO_IGNORES:
                     filtered_executions[execution_hash] = execution
         else:
             filtered_executions = executions
