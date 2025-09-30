@@ -408,13 +408,13 @@ def compute_on_schedule(
 
     schedule.every(settings.DAEMON_MODE_PERIOD_HOURS).hours.at(":00").do(
         compute_scores,
-        save=output,
+        output=output,
         publish=publish,
         log_level=log_level,
     )
     schedule.every(settings.EXECUTIONS_DAEMON_PERIOD_HOURS).hours.at(":30").do(
         record_executions,
-        save=output,
+        output=output,
         publish=publish,
         log_level=log_level,
     )
