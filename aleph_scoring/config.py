@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     ASN_DB_DIRECTORY: Path = Path(__file__).parent.parent / "asn"
     ASN_DB_REFRESH_PERIOD_DAYS: int = 1
     DAEMON_MODE_PERIOD_HOURS: int = 24
+    EXECUTIONS_DAEMON_PERIOD_HOURS: int = 1
     EXPORT_DATAFRAME: bool = False
     ETHEREUM_PRIVATE_KEY: str = (
         "0x95c6bc829ddf6a83b5d8b228db2942fe828802fb63f412586ea7c2d0036b4020"
