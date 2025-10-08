@@ -35,21 +35,22 @@ def ftp_download(server: Server, remote_dir: str, remote_file: str, local_file: 
         ftp.cwd(remote_dir)
         logger.debug("Downloading ftp://%s/%s/%s", server, remote_dir, remote_file)
         filesize = ftp.size(remote_file)
-        # perhaps warn before overwriting file?
+        # perhaps warn before an overwriting file?
+        local_file.parent.mkdir(parents=True, exist_ok=True)
         with local_file.open("wb") as fp:
 
             def recv(s):
                 fp.write(s)
-                recv.chunk += 1
-                recv.bytes += len(s)
-                if recv.chunk % 100 == 0:
+                recv.chunk += 1  # type: ignore
+                recv.bytes += len(s)  # type: ignore
+                if recv.chunk % 100 == 0:  # type: ignore
                     logger.debug(
                         "\r %.f%%, %.fKB/s",
-                        recv.bytes * 100 / filesize,
-                        recv.bytes / (1000 * (time() - recv.start)),
+                        recv.bytes * 100 / filesize,  # type: ignore
+                        recv.bytes / (1000 * (time() - recv.start)),  # type: ignore
                     )
 
-            recv.chunk, recv.bytes, recv.start = 0, 0, time()
+            recv.chunk, recv.bytes, recv.start = 0, 0, time()  # type: ignore
             ftp.retrbinary("RETR %s" % remote_file, recv)
     logger.debug("\nDownload complete.")
 
@@ -89,7 +90,7 @@ def find_latest_routeviews(
 ) -> Tuple[Server, str, str]:
     # RouteViews archives are as follows:
     # ftp://archive.routeviews.org/datapath/YYYYMM/ribs/XXXX
-    archive_ipv: str = str(archive_ipv)
+    archive_ipv: str = str(archive_ipv)  # type: ignore
     assert archive_ipv in ("4", "6", "46", "64")
     return find_latest_in_ftp(
         server=Server("archive.routeviews.org"),
@@ -137,7 +138,7 @@ def _parse_asname_line(line: str) -> Tuple[str, str]:
     match = EXTRACT_ASNAME_C.match(line)
     if not match:
         raise ValueError(f"Could not parse line: {line}, no match found.")
-    return match.groups()
+    return match.groups()  # type:ignore
 
 
 # Imported from pyasn_util_asnames.py
@@ -146,7 +147,7 @@ def _html_to_dict(data: str) -> Dict:
     Translates an HTML string available at `ASNAMES_URL` into a dict
     """
     lines = data.split("\n")
-    lines = (line for line in lines if line.startswith("<a"))
+    lines = list(line for line in lines if line.startswith("<a"))
     asn_name_tuples = (_parse_asname_line(line) for line in lines)
     return dict(asn_name_tuples)
 

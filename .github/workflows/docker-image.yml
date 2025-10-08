@@ -2,7 +2,7 @@ name: Publish Docker image
 
 on:
   push:
-    branches: '**'
+    branches: ["main"]
 
 env:
   REPO_NAME: ${{ github.repository }}

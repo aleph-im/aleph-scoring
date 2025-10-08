@@ -14,8 +14,11 @@ from aleph.sdk.chains.ethereum import ETHAccount
 from aleph.sdk.client import AuthenticatedAlephHttpClient
 from aleph.sdk.types import Account
 from hexbytes import HexBytes
+from pydantic import BaseModel
 
 from aleph_scoring.config import settings
+from aleph_scoring.executions import record_node_executions_sync
+from aleph_scoring.executions.models import ExecutionsPost, NodeExecutions
 from aleph_scoring.metrics import measure_node_performance_sync
 from aleph_scoring.metrics.models import MetricsPost, NodeMetrics
 from aleph_scoring.scoring import compute_ccn_scores, compute_crn_scores
@@ -28,7 +31,7 @@ aleph_account: Optional[ETHAccount] = None
 app = typer.Typer()
 
 
-def save_as_json(node_metrics: NodeMetrics, file: Path):
+def save_as_json(node_metrics: BaseModel, file: Path):
     with file.open(mode="w") as f:
         f.write(node_metrics.json(indent=4))
 
@@ -187,6 +190,62 @@ def measure(
     if publish:
         ensure_private_key_available()
     run_measurements(output=output, publish=publish)
+
+
+async def publish_executions_on_aleph(
+    account: Account, node_executions: NodeExecutions
+):
+    channel = settings.ALEPH_POST_TYPE_CHANNEL
+    aleph_api_server = settings.NODE_DATA_HOST
+
+    metrics_post_data = ExecutionsPost(tags=["mainnet"], executions=node_executions)
+    async with AuthenticatedAlephHttpClient(
+        account=account, api_server=aleph_api_server
+    ) as client:
+        metrics_post, status = await client.create_post(
+            post_content=metrics_post_data,
+            post_type=settings.ALEPH_POST_TYPE_EXECUTIONS,
+            channel=channel,
+        )
+    logger.info(
+        "Published executions on Aleph with status %s: %s",
+        status,
+        metrics_post.item_hash,
+    )
+
+
+@app.command()
+def record_executions(
+    output: Optional[Path] = typer.Option(
+        default=None, help="Path where to save the result in JSON format."
+    ),
+    publish: bool = typer.Option(
+        default=False,
+        help="Publish the results on Aleph.",
+    ),
+    stdout: bool = typer.Option(default=False, help="Print the result on stdout"),
+    log_level: str = typer.Option(
+        default=LogLevel.INFO.name,
+        help="Logging level",
+    ),
+):
+    logging.basicConfig(level=LogLevel[log_level].value)
+    if publish:
+        ensure_private_key_available()
+
+    node_executions = record_node_executions_sync()
+
+    if output:
+        save_as_json(node_metrics=node_executions, file=output)
+    if stdout:
+        print(node_executions.json(indent=4))
+    if publish:
+        account = get_aleph_account()
+        asyncio.run(
+            publish_executions_on_aleph(
+                account=account, node_executions=node_executions
+            )
+        )
 
 
 @app.command()
@@ -349,7 +408,13 @@ def compute_on_schedule(
 
     schedule.every(settings.DAEMON_MODE_PERIOD_HOURS).hours.at(":00").do(
         compute_scores,
-        save=output,
+        output=output,
+        publish=publish,
+        log_level=log_level,
+    )
+    schedule.every(settings.EXECUTIONS_DAEMON_PERIOD_HOURS).hours.at(":30").do(
+        record_executions,
+        output=output,
         publish=publish,
         log_level=log_level,
     )

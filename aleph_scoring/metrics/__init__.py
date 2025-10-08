@@ -15,7 +15,6 @@ from typing import (
     Iterable,
     List,
     Literal,
-    NewType,
     Optional,
     Sequence,
     Tuple,
@@ -62,7 +61,7 @@ IP4_SERVICE_URLS = ["https://v4.ident.me/", "https://api.ipify.org/"]
 CRN_DIAGNOSTIC_VM_PATH = "{url}vm/" + settings.DIAGNOSTIC_VM_ITEM_HASH
 
 
-TimeoutGenerator = NewType("TimeoutGenerator", Callable[[], aiohttp.ClientTimeout])
+TimeoutGenerator = Callable[[], aiohttp.ClientTimeout]
 
 
 def timeout_generator(
@@ -71,13 +70,11 @@ def timeout_generator(
     def randomize(value: float) -> float:
         return value + value * 0.3 * random()
 
-    return TimeoutGenerator(
-        lambda: aiohttp.ClientTimeout(
-            total=randomize(total),
-            connect=randomize(connect),
-            sock_connect=randomize(sock_connect),
-            sock_read=randomize(sock_read),
-        )
+    return lambda: aiohttp.ClientTimeout(
+        total=randomize(total),
+        connect=randomize(connect),
+        sock_connect=randomize(sock_connect),
+        sock_read=randomize(sock_read),
     )
 
 
@@ -111,7 +108,7 @@ def get_api_node_urls(raw_data: Dict[str, Any]) -> Generator[NodeInfo, None, Non
 
 
 def get_compute_resource_node_urls(
-    raw_data: Dict[str, Any]
+    raw_data: Dict[str, Any],
 ) -> Generator[NodeInfo, None, None]:
     """Extract CRN node urls the node data."""
     for node in raw_data["resource_nodes"]:
@@ -606,7 +603,7 @@ async def collect_node_metrics(
 
 
 async def collect_all_ccn_metrics(
-    node_data: Dict[str, Any]
+    node_data: Dict[str, Any],
 ) -> Sequence[CcnMetrics | BaseException]:
     node_infos = list(get_api_node_urls(node_data))
     shuffle(node_infos)  # Avoid artifacts from the order in the list
@@ -616,7 +613,7 @@ async def collect_all_ccn_metrics(
 
 
 async def collect_all_crn_metrics(
-    node_data: Dict[str, Any]
+    node_data: Dict[str, Any],
 ) -> Sequence[CrnMetrics | BaseException]:
     node_infos = list(get_compute_resource_node_urls(node_data))
     shuffle(node_infos)  # Avoid artifacts from the order in the list
