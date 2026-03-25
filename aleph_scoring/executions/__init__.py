@@ -91,18 +91,41 @@ def get_compute_resource_node_urls(
 async def fetch_crn_executions(
     session: aiohttp.ClientSession, node_url: str
 ) -> Optional[dict[str, Any]]:
-    try:
-        async with asyncio.timeout(settings.HTTP_REQUEST_TIMEOUT):
-            async with session.get(node_url) as resp:
-                r = await resp.json()
-                return r
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            async with asyncio.timeout(settings.HTTP_REQUEST_TIMEOUT):
+                async with session.get(node_url) as resp:
+                    r = await resp.json()
+                    return r
 
-    except (aiohttp.ClientResponseError, aiohttp.ClientConnectorError) as e:
-        logger.debug(f"Error when fetching executions from {node_url} {e}")
-        return None
-    except asyncio.TimeoutError:
-        logger.debug(f"Timeout error when fetching executions from  {node_url}")
-        return None
+        except aiohttp.ClientError as e:
+            if attempt < max_retries - 1:
+                wait = 2**attempt
+                logger.debug(
+                    f"Error when fetching executions from {node_url} ({e}), "
+                    f"retrying in {wait}s (attempt {attempt + 1}/{max_retries})"
+                )
+                await asyncio.sleep(wait)
+            else:
+                logger.warning(
+                    f"Failed to fetch executions from {node_url} after {max_retries} attempts: {e}"
+                )
+                return None
+        except asyncio.TimeoutError:
+            if attempt < max_retries - 1:
+                wait = 2**attempt
+                logger.debug(
+                    f"Timeout when fetching executions from {node_url}, "
+                    f"retrying in {wait}s (attempt {attempt + 1}/{max_retries})"
+                )
+                await asyncio.sleep(wait)
+            else:
+                logger.warning(
+                    f"Timeout fetching executions from {node_url} after {max_retries} attempts"
+                )
+                return None
+    return None
 
 
 async def get_crn_executions(
@@ -174,7 +197,8 @@ async def collect_node_executions(
         total=60.0, connect=10.0, sock_connect=10.0, sock_read=60.0
     )
     return await asyncio.gather(
-        *[executions_function(timeout, node_info) for node_info in node_infos]
+        *[executions_function(timeout, node_info) for node_info in node_infos],
+        return_exceptions=True,
     )
 
 
