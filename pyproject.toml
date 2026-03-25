@@ -21,7 +21,9 @@ dependencies = [
     # "nbconvert==7.16.4",
     ## "pandas==2.2.2",
     # "pandoc==2.4",
-    "setuptools",
+    # setuptools>=81 removes pkg_resources, which web3 (via superfluid/aleph-sdk) still imports.
+    # Pin until aleph-sdk-python is updated to a web3 version that drops this dependency.
+    "setuptools<81",
     "pyasn==1.6.2",
     "typer",
     "schedule",
