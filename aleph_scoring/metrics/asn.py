@@ -138,7 +138,7 @@ def _parse_asname_line(line: str) -> Tuple[str, str]:
     match = EXTRACT_ASNAME_C.match(line)
     if not match:
         raise ValueError(f"Could not parse line: {line}, no match found.")
-    return match.groups()  # type:ignore
+    return match.groups()  # type: ignore
 
 
 # Imported from pyasn_util_asnames.py
