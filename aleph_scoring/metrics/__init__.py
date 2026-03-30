@@ -598,7 +598,8 @@ async def collect_node_metrics(
         total=60.0, connect=10.0, sock_connect=10.0, sock_read=60.0
     )
     return await asyncio.gather(
-        *[metrics_function(timeout, asn_db, node_info) for node_info in node_infos]
+        *[metrics_function(timeout, asn_db, node_info) for node_info in node_infos],
+        return_exceptions=True,
     )
 
 
