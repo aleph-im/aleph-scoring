@@ -9,9 +9,7 @@ WITH base_query AS (
         percentile_cont(0.67) WITHIN GROUP (ORDER BY (node -> 'aggregate_latency')::float) AS aggregate_latency_67th_percentile,
         percentile_cont(0.67) WITHIN GROUP (ORDER BY (node -> 'file_download_latency')::float) AS file_download_latency_67th_percentile,
 
-        MAX(is_version_valid('pyaleph', node ->> 'version', to_timestamp((node ->> 'measured_at')::float)::date)) AS version_valid,
-
-        EXTRACT(EPOCH FROM AGE($1::timestamp, date_trunc('hour', posts.creation_datetime))) / 3600 AS hours_difference
+        MAX(is_version_valid('pyaleph', node ->> 'version', to_timestamp((node ->> 'measured_at')::float)::date)) AS version_valid
     FROM posts,
          jsonb_array_elements(content -> 'metrics' -> 'ccn') node
     WHERE owner = $5
@@ -20,6 +18,11 @@ WITH base_query AS (
       AND posts.creation_datetime < $1::timestamp
       --AND node ->> 'node_id' IN ()
     GROUP BY node ->> 'node_id', date_trunc('hour', posts.creation_datetime)
+),
+ranked_query AS (
+    SELECT *,
+        ROW_NUMBER() OVER (PARTITION BY node_id ORDER BY hour DESC) AS recency_rank
+    FROM base_query
 )
 SELECT
     node_id,
@@ -28,9 +31,9 @@ SELECT
     (
         SUM(
             (
-                geometric_pmf($3, CEIL(hours_difference)) * $7
+                geometric_pmf($3, recency_rank::INT) * $7
                 +
-                geometric_pmf($4, CEIL(hours_difference)) * $8
+                geometric_pmf($4, recency_rank::INT) * $8
             ) * (
                 (
                     GREATEST(1 - ((base_latency_67th_percentile ^ 2) / 4), 0) *
@@ -41,8 +44,8 @@ SELECT
             ) * (
                 version_valid
             )
-        ) ^ 0.75
-    ) AS total_score
-FROM base_query
+        )
+    ) ^ 0.75 AS total_score
+FROM ranked_query
 GROUP BY node_id
 ORDER BY total_score DESC;

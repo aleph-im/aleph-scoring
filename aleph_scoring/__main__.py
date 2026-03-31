@@ -426,6 +426,74 @@ def compute_on_schedule(
 
 
 @app.command()
+def backfill_scores(
+    start: str = typer.Argument(
+        help="Start datetime in ISO format (e.g. 2026-03-20T00:00:00+00:00)"
+    ),
+    end: str = typer.Argument(
+        help="End datetime in ISO format (e.g. 2026-03-31T00:00:00+00:00)"
+    ),
+    interval_hours: int = typer.Option(
+        default=4,
+        help="Hours between each score computation",
+    ),
+    publish: bool = typer.Option(
+        default=False,
+        help="Publish the results on Aleph.",
+    ),
+    output: Optional[Path] = typer.Option(
+        default=None,
+        help="Directory to save JSON results",
+    ),
+    log_level: str = typer.Option(
+        default=LogLevel.INFO.name,
+        help="Logging level",
+    ),
+):
+    """Backfill missing scores for a date range."""
+    logging.basicConfig(level=LogLevel[log_level].value)
+    if publish:
+        ensure_private_key_available()
+
+    start_date = datetime.fromisoformat(start)
+    end_date = datetime.fromisoformat(end)
+    interval = timedelta(hours=interval_hours)
+
+    current = start_date
+    while current <= end_date:
+        from_date = current - settings.SCORE_METRICS_PERIOD
+        period = Period(from_date=from_date, to_date=current)
+
+        logger.info(
+            "Backfilling scores for %s", current.isoformat()
+        )
+
+        ccn_scores = asyncio.run(
+            compute_ccn_scores(period=period)
+        )
+        crn_scores = asyncio.run(
+            compute_crn_scores(period=period)
+        )
+
+        scores = NodeScores(ccn=ccn_scores, crn=crn_scores)
+
+        if output:
+            filename = output / f"scores_{current.strftime('%Y%m%dT%H%M%S')}.json"
+            with open(filename, "w") as fd:
+                fd.write(scores.json(indent=4))
+            logger.info("Saved %s", filename)
+
+        if publish:
+            account = get_aleph_account()
+            asyncio.run(
+                publish_scores_on_aleph(account, scores, period)
+            )
+            logger.info("Published scores for %s", current.isoformat())
+
+        current += interval
+
+
+@app.command()
 def export_as_html(input_file: Optional[Path]):
     os.system("jupyter nbconvert --execute Node\\ Score\\ Analysis.ipynb --to html")
 

@@ -25,6 +25,7 @@ USER source
 RUN python3 -m venv /opt/venv
 
 RUN /opt/venv/bin/pip install --upgrade pip
+RUN /opt/venv/bin/pip install "setuptools<81"
 RUN /opt/venv/bin/pip install /opt/scoring/
 
 WORKDIR /opt/scoring
