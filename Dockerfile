@@ -45,4 +45,5 @@ VOLUME "/srv/asn"
 RUN /opt/venv/bin/python -m aleph_scoring --help
 
 ENTRYPOINT ["/opt/venv/bin/python", "-m", "aleph_scoring"]
-CMD ["measure-on-schedule", "--publish"]
+#CMD ["measure-on-schedule", "--publish"]
+CMD ["measure", "--publish"]

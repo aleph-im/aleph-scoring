@@ -20,6 +20,19 @@
   in {
     packages.${system} = {
       default = aleph-scoring;
+      docker-image = pkgs.dockerTools.buildLayeredImage {
+        name = "registry.digitalocean.com/aleph-scoring/metrics";
+        tag = "latest";
+        contents = [aleph-scoring pkgs.cacert pkgs.coreutils pkgs.bash];
+        config = {
+          Entrypoint = ["${aleph-scoring}/bin/scoring"];
+          Cmd = ["measure" "--publish"];
+          Env = [
+            "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
+            "ALEPH_SCORING_ASN_DB_DIRECTORY=/tmp/asn"
+          ];
+        };
+      };
       digitalocean-image =
         self.nixosConfigurations.digitalocean.config.system.build.diskoImages;
     };

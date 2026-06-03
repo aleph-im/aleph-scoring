@@ -122,39 +122,46 @@ def convert_asn_database(archive_file: Path, db_file: Path):
     mrtx.dump_prefixes_to_file(prefixes, str(db_file), str(archive_file))
 
 
-# Imported from pyasn_util_asnames.py
-def download_asnames() -> str:
-    """
-    Downloads and parses to utf-8 asnames html file
-    """
-    asnames_url = "http://www.cidr-report.org/as2.0/autnums.html"
-    response = requests.get(asnames_url)
-
+def download_asnames_from_ripe() -> Dict:
+    """Download AS names from RIPE FTP (reliable alternative)."""
+    ripe_url = "https://ftp.ripe.net/ripe/asnames/asn.txt"
+    response = requests.get(ripe_url, timeout=30)
     response.raise_for_status()
-    return response.text
 
-
-def _parse_asname_line(line: str) -> Tuple[str, str]:
-    match = EXTRACT_ASNAME_C.match(line)
-    if not match:
-        raise ValueError(f"Could not parse line: {line}, no match found.")
-    return match.groups()  # type: ignore
+    result = {}
+    for line in response.text.strip().split("\n"):
+        parts = line.split(" ", 1)
+        if len(parts) == 2 and parts[0].isdigit():
+            result[parts[0]] = parts[1].strip()
+    return result
 
 
 # Imported from pyasn_util_asnames.py
-def _html_to_dict(data: str) -> Dict:
-    """
-    Translates an HTML string available at `ASNAMES_URL` into a dict
-    """
-    lines = data.split("\n")
-    lines = list(line for line in lines if line.startswith("<a"))
-    asn_name_tuples = (_parse_asname_line(line) for line in lines)
-    return dict(asn_name_tuples)
+def download_asnames_from_cidr() -> Dict:
+    """Download AS names from cidr-report.org (original source)."""
+    asnames_url = "http://www.cidr-report.org/as2.0/autnums.html"
+    response = requests.get(asnames_url, timeout=30)
+    response.raise_for_status()
+
+    lines = response.text.split("\n")
+    lines = [line for line in lines if line.startswith("<a")]
+    result = {}
+    for line in lines:
+        match = EXTRACT_ASNAME_C.match(line)
+        if match:
+            code, name = match.groups()
+            result[code] = name
+    return result
 
 
 def update_names_file(names_file: Path):
-    asnames = download_asnames()
-    asnames_dict = _html_to_dict(asnames)
+    try:
+        asnames_dict = download_asnames_from_ripe()
+    except Exception as e:
+        logger.warning(
+            "RIPE unavailable (%s), falling back to cidr-report.org", e
+        )
+        asnames_dict = download_asnames_from_cidr()
 
     with names_file.open("w") as f:
         f.write(json.dumps(asnames_dict))

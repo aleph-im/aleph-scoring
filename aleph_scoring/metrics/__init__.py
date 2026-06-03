@@ -1,8 +1,10 @@
 import asyncio
+import functools
 import logging
 import re
 import socket
 import time
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from ipaddress import IPv4Address, IPv6Address, IPv6Network
 from random import random, shuffle
@@ -24,7 +26,6 @@ from typing import (
 from urllib.parse import urlparse
 
 import aiohttp
-import psutil
 import pyasn
 from aleph.sdk import AlephHttpClient
 from aleph_message.models import ItemHash
@@ -62,6 +63,19 @@ CRN_DIAGNOSTIC_VM_PATH = "{url}vm/" + settings.DIAGNOSTIC_VM_ITEM_HASH
 
 
 TimeoutGenerator = Callable[[], aiohttp.ClientTimeout]
+
+
+@dataclass
+class CcnSessions:
+    ipv4: aiohttp.ClientSession
+    any_ip: aiohttp.ClientSession
+
+
+@dataclass
+class CrnSessions:
+    ipv4: aiohttp.ClientSession
+    ipv6: aiohttp.ClientSession
+    any_ip: aiohttp.ClientSession
 
 
 def timeout_generator(
@@ -134,7 +148,7 @@ async def measure_http_latency(
     expected_status: int = 200,
 ) -> Tuple[Optional[float], Optional[Any]]:
     try:
-        async with asyncio.timeout(timeout_seconds + timeout_seconds * 0.3 * random()):
+        async with asyncio.timeout(timeout_seconds):
             start = time.time()
             async with session.get(url) as resp:
                 if resp.status != expected_status:
@@ -157,17 +171,16 @@ async def measure_http_latency(
                     end = time.time()
                     logger.debug(f"Success when fetching {url}")
                     return end - start, None
-    except aiohttp.ClientResponseError:
-        logger.debug(f"Client error when fetching {url}")
-        return None, None
-    except aiohttp.ClientConnectorError:
-        logger.debug(f"Connection error when fetching {url}")
-        return None, None
-    except aiohttp.ServerDisconnectedError:
-        logger.debug(f"Server error when fetching {url}")
-        return None, None
-    except asyncio.TimeoutError:
-        logger.debug(f"Timeout error when fetching {url}")
+    except (
+        aiohttp.ClientResponseError,
+        aiohttp.ClientConnectorError,
+        aiohttp.ServerDisconnectedError,
+        aiohttp.ClientOSError,
+        ConnectionResetError,
+        OSError,
+        asyncio.TimeoutError,
+    ) as e:
+        logger.debug("Error fetching %s: %s: %s", url, type(e).__name__, e)
         return None, None
 
 
@@ -176,10 +189,7 @@ async def get_crn_version(
 ) -> Optional[str]:
     # Retrieve the CRN version from header `server`.
     try:
-        async with asyncio.timeout(
-            settings.HTTP_REQUEST_TIMEOUT
-            + settings.HTTP_REQUEST_TIMEOUT * 0.3 * random(),
-        ):
+        async with asyncio.timeout(settings.HTTP_REQUEST_TIMEOUT):
             async with session.get(node_url) as resp:
                 resp.raise_for_status()
                 if "Server" not in resp.headers:
@@ -191,11 +201,16 @@ async def get_crn_version(
                 else:
                     return None
 
-    except (aiohttp.ClientResponseError, aiohttp.ClientConnectorError):
-        logger.debug(f"Error when fetching version from {node_url}")
-        return None
-    except asyncio.TimeoutError:
-        logger.debug(f"Timeout error when fetching version from  {node_url}")
+    except (
+        aiohttp.ClientResponseError,
+        aiohttp.ClientConnectorError,
+        aiohttp.ServerDisconnectedError,
+        aiohttp.ClientOSError,
+        ConnectionResetError,
+        OSError,
+        asyncio.TimeoutError,
+    ) as e:
+        logger.debug("Error fetching version from %s: %s: %s", node_url, type(e).__name__, e)
         return None
 
 
@@ -204,6 +219,7 @@ def get_url_domain(url: str) -> str:
     return domain.split(":")[0]  # Remove port
 
 
+@functools.lru_cache(maxsize=2048)
 def get_ipv4(url: str) -> Optional[str]:
     domain = get_url_domain(url)
     try:
@@ -212,6 +228,7 @@ def get_ipv4(url: str) -> Optional[str]:
         return None
 
 
+@functools.lru_cache(maxsize=2048)
 def get_ipv6(url: str) -> Optional[str]:
     domain = get_url_domain(url)
     try:
@@ -276,6 +293,14 @@ async def ping_vm(crn_url: str, vm_hash: ItemHash) -> Optional[float]:
     return min_response_time
 
 
+def seconds_since_process_has_started() -> float:
+    """Returns the number of seconds since the process has started."""
+    import psutil
+
+    process = psutil.Process()
+    return time.time() - process.create_time()
+
+
 def lookup_asn(
     asn_db: pyasn.pyasn, url: str
 ) -> Union[Tuple[str, str], Tuple[None, None]]:
@@ -290,12 +315,6 @@ def lookup_asn(
 
     return asn, asn_db.get_as_name(asn)
 
-
-def seconds_since_process_has_started() -> float:
-    """Returns the number of seconds since the process has started"""
-    process = psutil.Process()  # current process
-    start_time = process.create_time()
-    return time.time() - start_time
 
 
 class CcnBuildInfo(BaseModel):
@@ -320,107 +339,49 @@ class CcnApiMetricsResponse(BaseModel):
 
 
 async def get_ccn_metrics(
-    timeout_generator: TimeoutGenerator, asn_db: pyasn.pyasn, node_info: NodeInfo
+    timeout_generator: TimeoutGenerator,
+    asn_db: pyasn.pyasn,
+    node_info: NodeInfo,
+    *,
+    sessions: CcnSessions,
 ) -> CcnMetrics:
     """Fetch or measure the metrics of a Core Channel Node."""
-    # Starting to call all the nodes at the same time can cause issues, in particular:
-    #  - bias due to the computing overhead
-    #  - network issues due to opening many concurrent connections
-    #  - throttling by hosting providers
-    #
-    # In order to avoid this scenario, each coroutine (specific to one host)
-    # waits for a random time (linear distribution) between 0 and 60 minutes
-    # (excluding the time to get to this step: update ASN database and fetch node list)
-    margin_to_publish: float = (
-        120  # Allow time to publish the data and not offset the next measurements
-    )
-    delay_seconds: float = (
-        (random() * 60 * 60) - seconds_since_process_has_started() - margin_to_publish
-    )
-    logger.debug(
-        f"Waiting {delay_seconds} seconds before fetching metrics for {node_info.hash}"
-    )
-    await asyncio.sleep(delay_seconds)
-    logger.debug(f"Done waiting for {node_info.hash}")
-
     url = node_info.url.url
-    measured_at = datetime.now(tz=timezone.utc)
-
     asn, as_name = lookup_asn(asn_db, url)
 
-    # Fetch the base latency using strict IPv4
-    async with aiohttp.ClientSession(
-        timeout=timeout_generator(),
-        connector=aiohttp.TCPConnector(
-            family=socket.AF_INET,
-            keepalive_timeout=300,
-            limit=1000,
-            limit_per_host=20,
-        ),
-    ) as session_ipv4:
-        base_latency_ipv4 = (
-            await measure_http_latency(session_ipv4, f"{url}api/v0/info/public.json")
-        )[0]
-
-    # Fetch most metrics using either IPv4 or IPv6
-    async with aiohttp.ClientSession(
-        timeout=timeout_generator(),
-        connector=aiohttp.TCPConnector(
-            family=socket.AF_UNSPEC,  # either IPv4 or IPv6
-            keepalive_timeout=300,
-            limit=1000,
-            limit_per_host=20,
-        ),
-    ) as session:
-        # Fetch base latency again in order to pre-open the session
-        _ = (await measure_http_latency(session, f"{url}api/v0/info/public.json"))[0]
-        metrics_latency = (
-            await measure_http_latency(
-                session, f"{url}metrics.json", settings.HTTP_REQUEST_TIMEOUT
-            )
-        )[0]
-        aggregate_latency = (
-            await measure_http_latency(
-                session,
-                "".join(CCN_AGGREGATE_PATH).format(url=url),
-            )
-        )[0]
-        file_download_latency = (
-            await measure_http_latency(
-                session,
-                "".join(CCN_FILE_DOWNLOAD_PATH).format(url=url),
-            )
-        )[0]
-        time, json_text = await measure_http_latency(
-            session,
-            f"{url}metrics.json",
-            settings.HTTP_REQUEST_TIMEOUT,
-            return_output=True,
+    # Latency measurements must be sequential per node for accurate readings
+    base_latency_ipv4 = (
+        await measure_http_latency(sessions.ipv4, f"{url}api/v0/info/public.json")
+    )[0]
+    metrics_latency = (
+        await measure_http_latency(
+            sessions.any_ip, f"{url}metrics.json", settings.HTTP_REQUEST_TIMEOUT
         )
+    )[0]
+    aggregate_latency = (
+        await measure_http_latency(
+            sessions.any_ip, "".join(CCN_AGGREGATE_PATH).format(url=url)
+        )
+    )[0]
+    file_download_latency = (
+        await measure_http_latency(
+            sessions.any_ip, "".join(CCN_FILE_DOWNLOAD_PATH).format(url=url)
+        )
+    )[0]
+    _, json_text = await measure_http_latency(
+        sessions.any_ip,
+        f"{url}metrics.json",
+        settings.HTTP_REQUEST_TIMEOUT,
+        return_output=True,
+    )
 
-        if json_text is not None:
-            json_object = CcnApiMetricsResponse.parse_obj(json_text)
-        else:
-            json_object = CcnApiMetricsResponse()
-        version = json_object.version()
+    if json_text is not None:
+        json_object = CcnApiMetricsResponse.parse_obj(json_text)
+    else:
+        json_object = CcnApiMetricsResponse()
+    version = json_object.version()
 
-    # Fetch the base latency using strict IPv6
-    # async with aiohttp.ClientSession(
-    #     timeout=timeout_generator(),
-    #     connector=aiohttp.TCPConnector(
-    #         family=socket.AF_INET6,
-    #         keepalive_timeout=300,
-    #         limit=1000,
-    #         limit_per_host=20,
-    #     ),
-    # ) as session_ipv6:
-    #     _ = (await measure_http_latency(session_ipv6, f"{url}api/v0/info/public.json"))[0]
-    #     base_latency_ipv6 = (
-    #         await measure_http_latency(session_ipv6, f"{url}api/v0/info/public.json")
-    #     )[0]
-
-    # There is currently no IPv6 in the multiaddr of CCNs
-    base_latency_ipv6 = None
+    measured_at = datetime.now(tz=timezone.utc)
 
     return CcnMetrics(
         measured_at=measured_at.timestamp(),
@@ -429,9 +390,7 @@ async def get_ccn_metrics(
         asn=int(asn) if asn else None,
         as_name=as_name,
         version=version,
-        # days_outdated=compute_ccn_version_days_outdated(version=version),
-        base_latency=base_latency_ipv6
-        or base_latency_ipv4,  # allow either IPv6 or IPv4 for now
+        base_latency=base_latency_ipv4,
         base_latency_ipv4=base_latency_ipv4,
         metrics_latency=metrics_latency,
         aggregate_latency=aggregate_latency,
@@ -448,126 +407,85 @@ async def fetch_supported_features(
     """Fetch the list of features supported by a node."""
     url = f"{node_url}about/usage/system"
     try:
-        async with asyncio.timeout(timeout_seconds + timeout_seconds * 0.3 * random()):
+        async with asyncio.timeout(timeout_seconds):
             async with session.get(url) as resp:
                 resp.raise_for_status()
                 system_info_raw = await resp.json()
                 return system_info_raw["properties"]["cpu"].get("features", None)
     except KeyError as e:
-        logger.debug(f"Invalid response when fetching features from {url}: {e}")
+        logger.debug("Invalid response when fetching features from %s: %s", url, e)
         return None
-    except (aiohttp.ClientResponseError, aiohttp.ClientConnectorError) as e:
-        logger.debug(f"Error when fetching features from {url}: {e}")
-        return None
-    except TimeoutError as e:
-        logger.debug(f"Timeout error when fetching features from {url}: {e}")
+    except (
+        aiohttp.ClientResponseError,
+        aiohttp.ClientConnectorError,
+        aiohttp.ServerDisconnectedError,
+        aiohttp.ClientOSError,
+        ConnectionResetError,
+        OSError,
+        asyncio.TimeoutError,
+    ) as e:
+        logger.debug("Error fetching features from %s: %s: %s", url, type(e).__name__, e)
         return None
 
 
 async def get_crn_metrics(
-    timeout_generator: TimeoutGenerator, asn_db: pyasn.pyasn, node_info: NodeInfo
+    timeout_generator: TimeoutGenerator,
+    asn_db: pyasn.pyasn,
+    node_info: NodeInfo,
+    *,
+    sessions: CrnSessions,
 ) -> CrnMetrics:
-    """Fetch or measure the metrics of a Core Channel Node."""
-    # Starting to call all the nodes at the same time can cause issues, in particular:
-    #  - bias due to the computing overhead
-    #  - network issues due to opening many concurrent connections
-    #  - throttling by hosting providers
-    #
-    # In order to avoid this scenario, each coroutine (specific to one host)
-    # waits for a random time (linear distribution) between 0 and 60 minutes.
-    # (excluding the time to get to this step: update ASN database and fetch node list)
-    margin_to_publish: float = (
-        120  # Allow time to publish the data and not offset the next measurements
-    )
-    delay_seconds: float = (
-        (random() * 60 * 60) - seconds_since_process_has_started() - margin_to_publish
-    )
-    logger.debug(
-        f"Waiting {delay_seconds} seconds before fetching metrics for {node_info.hash}"
-    )
-    await asyncio.sleep(delay_seconds)
-    logger.debug(f"Done waiting for {node_info.hash}")
-
+    """Fetch or measure the metrics of a Compute Resource Node."""
     url = node_info.url.url
-    measured_at = datetime.now(tz=timezone.utc)
-
     asn, as_name = lookup_asn(asn_db, url)
 
-    # Get the version over IPv4 or IPv6
-    async with aiohttp.ClientSession(timeout=timeout_generator()) as session_any_ip:
-        for attempt in range(3):
-            version = await get_crn_version(session=session_any_ip, node_url=url)
-            if version:
-                break
+    # Get the version (sequential with retry backoff)
+    version: Optional[str] = None
+    for attempt in range(3):
+        version = await get_crn_version(session=sessions.any_ip, node_url=url)
+        if version:
+            break
+        if attempt < 2:
+            await asyncio.sleep(2**attempt)
 
-    async with aiohttp.ClientSession(
-        timeout=timeout_generator(),
-        connector=aiohttp.TCPConnector(
-            family=socket.AF_INET6,
-            keepalive_timeout=300,
-            limit=1000,
-            limit_per_host=20,
-        ),
-    ) as session:
-        # Warmup the session
-        _ = await get_crn_version(session=session, node_url=url)
-
-        base_latency = (
-            await measure_http_latency(
-                session,
-                f"{url}about/login",
-                expected_status=401,
-            )
-        )[0]
-
-        diagnostic_vm_latency = (
-            await measure_http_latency(
-                session,
-                "".join(CRN_DIAGNOSTIC_VM_PATH).format(url=url),
-                timeout_seconds=10,
-            )
-        )[0]
-
-        if diagnostic_vm_latency is not None:
-            diagnostic_vm_ping_latency = await ping_vm(
-                crn_url=node_info.url.url,
-                vm_hash=ItemHash(settings.DIAGNOSTIC_VM_ITEM_HASH),
-            )
-        else:
-            logger.debug("Could not start diagnostic VM, skipping IPv6 ping check")
-            diagnostic_vm_ping_latency = None
-
-        full_check_latency = (
-            await measure_http_latency(
-                session,
-                f"{url}status/check/fastapi",
-                timeout_seconds=20,
-            )
-        )[0]
-
-        features_supported = await fetch_supported_features(
-            session, url, timeout_seconds=5
+    # Latency measurements over IPv6 (mandatory for CRNs)
+    base_latency = (
+        await measure_http_latency(
+            sessions.ipv6, f"{url}about/login", expected_status=401
         )
+    )[0]
 
-    async with aiohttp.ClientSession(
-        timeout=timeout_generator(),
-        connector=aiohttp.TCPConnector(
-            family=socket.AF_INET,
-            keepalive_timeout=300,
-            limit=1000,
-            limit_per_host=20,
-        ),
-    ) as session_ipv4:
-        # Warmup the session
-        _ = await get_crn_version(session=session_ipv4, node_url=url)
+    diagnostic_vm_latency = (
+        await measure_http_latency(
+            sessions.ipv6,
+            "".join(CRN_DIAGNOSTIC_VM_PATH).format(url=url),
+            timeout_seconds=10,
+        )
+    )[0]
 
-        base_latency_ipv4 = (
-            await measure_http_latency(
-                session_ipv4,
-                f"{url}about/login",
-                expected_status=401,
-            )
-        )[0]
+    if diagnostic_vm_latency is not None:
+        diagnostic_vm_ping_latency = await ping_vm(
+            crn_url=node_info.url.url,
+            vm_hash=ItemHash(settings.DIAGNOSTIC_VM_ITEM_HASH),
+        )
+    else:
+        diagnostic_vm_ping_latency = None
+
+    full_check_latency = (
+        await measure_http_latency(
+            sessions.ipv6, f"{url}status/check/fastapi", timeout_seconds=20
+        )
+    )[0]
+    features_supported = await fetch_supported_features(
+        sessions.ipv6, url, timeout_seconds=5
+    )
+    base_latency_ipv4 = (
+        await measure_http_latency(
+            sessions.ipv4, f"{url}about/login", expected_status=401
+        )
+    )[0]
+
+    measured_at = datetime.now(tz=timezone.utc)
 
     return CrnMetrics(
         measured_at=measured_at.timestamp(),
@@ -576,7 +494,6 @@ async def get_crn_metrics(
         asn=int(asn) if asn else None,
         as_name=as_name,
         version=version,
-        # days_outdated=compute_crn_version_days_outdated(version=version),
         base_latency=base_latency,
         base_latency_ipv4=base_latency_ipv4,
         diagnostic_vm_latency=diagnostic_vm_latency,
@@ -589,6 +506,9 @@ async def get_crn_metrics(
 M = TypeVar("M", bound=AlephNodeMetrics)
 
 
+MAX_CONCURRENT_MEASUREMENTS = 20
+
+
 async def collect_node_metrics(
     node_infos: Iterable[NodeInfo],
     metrics_function: Callable[[TimeoutGenerator, pyasn.pyasn, NodeInfo], Awaitable[M]],
@@ -597,9 +517,37 @@ async def collect_node_metrics(
     timeout = timeout_generator(
         total=60.0, connect=10.0, sock_connect=10.0, sock_read=60.0
     )
+    node_infos_list = list(node_infos)
+    total = len(node_infos_list)
+    completed = 0
+    semaphore = asyncio.Semaphore(MAX_CONCURRENT_MEASUREMENTS)
+    lock = asyncio.Lock()
+
+    async def tracked(node_info: NodeInfo) -> M:
+        nonlocal completed
+        async with semaphore:
+            try:
+                return await metrics_function(timeout, asn_db, node_info)
+            finally:
+                async with lock:
+                    completed += 1
+                    if completed % 50 == 0 or completed == total:
+                        logger.info(
+                            "Progress: %d/%d nodes measured", completed, total
+                        )
+
     return await asyncio.gather(
-        *[metrics_function(timeout, asn_db, node_info) for node_info in node_infos],
+        *[tracked(node_info) for node_info in node_infos_list],
         return_exceptions=True,
+    )
+
+
+def _make_connector(family: int) -> aiohttp.TCPConnector:
+    return aiohttp.TCPConnector(
+        family=family,
+        keepalive_timeout=30,
+        limit=100,
+        limit_per_host=1,
     )
 
 
@@ -608,9 +556,22 @@ async def collect_all_ccn_metrics(
 ) -> Sequence[CcnMetrics | BaseException]:
     node_infos = list(get_api_node_urls(node_data))
     shuffle(node_infos)  # Avoid artifacts from the order in the list
-    return await collect_node_metrics(
-        node_infos=node_infos, metrics_function=get_ccn_metrics
+    timeout = timeout_generator(
+        total=60.0, connect=10.0, sock_connect=10.0, sock_read=60.0
     )
+    async with (
+        aiohttp.ClientSession(
+            timeout=timeout(), connector=_make_connector(socket.AF_INET)
+        ) as s_ipv4,
+        aiohttp.ClientSession(
+            timeout=timeout(), connector=_make_connector(socket.AF_UNSPEC)
+        ) as s_any,
+    ):
+        sessions = CcnSessions(ipv4=s_ipv4, any_ip=s_any)
+        bound_fn = functools.partial(get_ccn_metrics, sessions=sessions)
+        return await collect_node_metrics(
+            node_infos=node_infos, metrics_function=bound_fn
+        )
 
 
 async def collect_all_crn_metrics(
@@ -618,9 +579,25 @@ async def collect_all_crn_metrics(
 ) -> Sequence[CrnMetrics | BaseException]:
     node_infos = list(get_compute_resource_node_urls(node_data))
     shuffle(node_infos)  # Avoid artifacts from the order in the list
-    return await collect_node_metrics(
-        node_infos=node_infos, metrics_function=get_crn_metrics
+    timeout = timeout_generator(
+        total=60.0, connect=10.0, sock_connect=10.0, sock_read=60.0
     )
+    async with (
+        aiohttp.ClientSession(
+            timeout=timeout(), connector=_make_connector(socket.AF_INET)
+        ) as s_ipv4,
+        aiohttp.ClientSession(
+            timeout=timeout(), connector=_make_connector(socket.AF_INET6)
+        ) as s_ipv6,
+        aiohttp.ClientSession(
+            timeout=timeout(), connector=_make_connector(socket.AF_UNSPEC)
+        ) as s_any,
+    ):
+        sessions = CrnSessions(ipv4=s_ipv4, ipv6=s_ipv6, any_ip=s_any)
+        bound_fn = functools.partial(get_crn_metrics, sessions=sessions)
+        return await collect_node_metrics(
+            node_infos=node_infos, metrics_function=bound_fn
+        )
 
 
 async def get_aleph_nodes() -> Dict:
