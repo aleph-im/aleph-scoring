@@ -464,16 +464,10 @@ def backfill_scores(
         from_date = current - settings.SCORE_METRICS_PERIOD
         period = Period(from_date=from_date, to_date=current)
 
-        logger.info(
-            "Backfilling scores for %s", current.isoformat()
-        )
+        logger.info("Backfilling scores for %s", current.isoformat())
 
-        ccn_scores = asyncio.run(
-            compute_ccn_scores(period=period)
-        )
-        crn_scores = asyncio.run(
-            compute_crn_scores(period=period)
-        )
+        ccn_scores = asyncio.run(compute_ccn_scores(period=period))
+        crn_scores = asyncio.run(compute_crn_scores(period=period))
 
         scores = NodeScores(ccn=ccn_scores, crn=crn_scores)
 
@@ -485,9 +479,7 @@ def backfill_scores(
 
         if publish:
             account = get_aleph_account()
-            asyncio.run(
-                publish_scores_on_aleph(account, scores, period)
-            )
+            asyncio.run(publish_scores_on_aleph(account, scores, period))
             logger.info("Published scores for %s", current.isoformat())
 
         current += interval

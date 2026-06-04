@@ -158,9 +158,7 @@ def update_names_file(names_file: Path):
     try:
         asnames_dict = download_asnames_from_ripe()
     except Exception as e:
-        logger.warning(
-            "RIPE unavailable (%s), falling back to cidr-report.org", e
-        )
+        logger.warning("RIPE unavailable (%s), falling back to cidr-report.org", e)
         asnames_dict = download_asnames_from_cidr()
 
     with names_file.open("w") as f:

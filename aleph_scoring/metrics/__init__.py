@@ -210,7 +210,9 @@ async def get_crn_version(
         OSError,
         asyncio.TimeoutError,
     ) as e:
-        logger.debug("Error fetching version from %s: %s: %s", node_url, type(e).__name__, e)
+        logger.debug(
+            "Error fetching version from %s: %s: %s", node_url, type(e).__name__, e
+        )
         return None
 
 
@@ -314,7 +316,6 @@ def lookup_asn(
         return None, None
 
     return asn, asn_db.get_as_name(asn)
-
 
 
 class CcnBuildInfo(BaseModel):
@@ -424,7 +425,9 @@ async def fetch_supported_features(
         OSError,
         asyncio.TimeoutError,
     ) as e:
-        logger.debug("Error fetching features from %s: %s: %s", url, type(e).__name__, e)
+        logger.debug(
+            "Error fetching features from %s: %s: %s", url, type(e).__name__, e
+        )
         return None
 
 
@@ -532,9 +535,7 @@ async def collect_node_metrics(
                 async with lock:
                     completed += 1
                     if completed % 50 == 0 or completed == total:
-                        logger.info(
-                            "Progress: %d/%d nodes measured", completed, total
-                        )
+                        logger.info("Progress: %d/%d nodes measured", completed, total)
 
     return await asyncio.gather(
         *[tracked(node_info) for node_info in node_infos_list],
