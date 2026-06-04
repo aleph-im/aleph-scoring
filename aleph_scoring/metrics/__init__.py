@@ -543,7 +543,7 @@ async def collect_node_metrics(
     )
 
 
-def _make_connector(family: int) -> aiohttp.TCPConnector:
+def _make_connector(family: socket.AddressFamily) -> aiohttp.TCPConnector:
     return aiohttp.TCPConnector(
         family=family,
         keepalive_timeout=30,
