@@ -167,8 +167,12 @@ async def measure_http_latency(
                     logger.debug(f"Success when fetching {url}")
                     return end - start, output
                 else:
-                    await resp.release()
                     end = time.time()
+                    # Drain the body so the connection returns to the shared
+                    # keep-alive pool. Releasing an unread response closes the
+                    # connection, forcing a fresh handshake into the next
+                    # measurement's latency.
+                    await resp.read()
                     logger.debug(f"Success when fetching {url}")
                     return end - start, None
     except (
@@ -360,13 +364,11 @@ async def get_ccn_metrics(
         )
     )[0]
     aggregate_latency = (
-        await measure_http_latency(
-            sessions.any_ip, "".join(CCN_AGGREGATE_PATH).format(url=url)
-        )
+        await measure_http_latency(sessions.any_ip, CCN_AGGREGATE_PATH.format(url=url))
     )[0]
     file_download_latency = (
         await measure_http_latency(
-            sessions.any_ip, "".join(CCN_FILE_DOWNLOAD_PATH).format(url=url)
+            sessions.any_ip, CCN_FILE_DOWNLOAD_PATH.format(url=url)
         )
     )[0]
     _, json_text = await measure_http_latency(
@@ -461,7 +463,7 @@ async def get_crn_metrics(
     diagnostic_vm_latency = (
         await measure_http_latency(
             sessions.ipv6,
-            "".join(CRN_DIAGNOSTIC_VM_PATH).format(url=url),
+            CRN_DIAGNOSTIC_VM_PATH.format(url=url),
             timeout_seconds=10,
         )
     )[0]
