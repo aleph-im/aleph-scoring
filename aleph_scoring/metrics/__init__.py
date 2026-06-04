@@ -7,7 +7,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from ipaddress import IPv4Address, IPv6Address, IPv6Network
-from random import random, shuffle
+from random import shuffle
 from typing import (
     Any,
     Awaitable,
@@ -81,15 +81,13 @@ class CrnSessions:
 def timeout_generator(
     total: float, connect: float, sock_connect: float, sock_read: float
 ) -> TimeoutGenerator:
-    def randomize(value: float) -> float:
-        return value + value * 0.3 * random()
-
-    return lambda: aiohttp.ClientTimeout(
-        total=randomize(total),
-        connect=randomize(connect),
-        sock_connect=randomize(sock_connect),
-        sock_read=randomize(sock_read),
+    timeout = aiohttp.ClientTimeout(
+        total=total,
+        connect=connect,
+        sock_connect=sock_connect,
+        sock_read=sock_read,
     )
+    return lambda: timeout
 
 
 class NodeInfo(BaseModel):
@@ -510,6 +508,9 @@ MAX_CONCURRENT_MEASUREMENTS = 20
 
 async def collect_node_metrics(
     node_infos: Iterable[NodeInfo],
+    # The sessions argument of get_ccn_metrics/get_crn_metrics is bound via
+    # functools.partial before this is called, so the remaining signature is
+    # (timeout_generator, asn_db, node_info).
     metrics_function: Callable[[TimeoutGenerator, pyasn.pyasn, NodeInfo], Awaitable[M]],
 ) -> Sequence[Union[M, BaseException]]:
     asn_db = get_asn_database()
@@ -527,6 +528,11 @@ async def collect_node_metrics(
         async with semaphore:
             try:
                 return await metrics_function(timeout, asn_db, node_info)
+            except Exception:
+                # gather(return_exceptions=True) would otherwise swallow this
+                # silently; log it before it is returned as a result value.
+                logger.exception("Failed to measure node %s", node_info.hash)
+                raise
             finally:
                 async with lock:
                     completed += 1
