@@ -460,6 +460,9 @@ def backfill_scores(
     interval = timedelta(hours=interval_hours)
 
     current = start_date
+    # Inclusive of end_date: each iteration scores the half-open window
+    # [from_date, current) (the SQL upper bound is exclusive), and we want a
+    # final snapshot computed at end_date itself.
     while current <= end_date:
         from_date = current - settings.SCORE_METRICS_PERIOD
         period = Period(from_date=from_date, to_date=current)

@@ -2,92 +2,108 @@ import datetime as dt
 
 import pytest
 
-from aleph_scoring.metrics import CcnMetrics, CrnMetrics
-from aleph_scoring.scoring import (
-    compute_ccn_scores,
-    compute_crn_scores,
-    sanitize_semver,
-)
-from aleph_scoring.utils import GithubRelease
+from aleph_scoring import scoring
+from aleph_scoring.scoring import compute_ccn_scores, compute_crn_scores
+from aleph_scoring.scoring.models import CcnMeasurements, CrnMeasurements
+from aleph_scoring.utils import Period
+
+
+class _FakeConnection:
+    """Stand-in for the asyncpg connection opened by compute_*_scores."""
+
+    async def close(self) -> None:
+        pass
 
 
 @pytest.fixture
-def latest_release():
-    return GithubRelease(
-        tag_name="0.2.5",
-        name="aleph-vm",
-        created_at=dt.datetime(2022, 10, 6),
-        published_at=dt.datetime(2022, 10, 6),
+def period() -> Period:
+    return Period(
+        from_date=dt.datetime(2022, 12, 1, tzinfo=dt.timezone.utc),
+        to_date=dt.datetime(2022, 12, 26, tzinfo=dt.timezone.utc),
     )
 
 
-def test_scoring_ccn(latest_release):
-    ccn_metrics = [
-        CcnMetrics(
-            measured_at=dt.datetime(2022, 12, 26).timestamp(),
-            node_id="1",
-            url="https://api1.aleph.im",
-            asn=1,
-            as_name="Aleph.im",
-            base_latency=0.4,
-            metrics_latency=0.3,
-            aggregate_latency=0.7,
-            file_download_latency=0.4,
-            pending_messages=204,
-            eth_height_remaining=0,
+def _patch_db(monkeypatch, *, asn_info_name, measurements_name, rows):
+    """Replace the DB boundary so the scoring functions run on `rows`."""
+
+    async def fake_connection(_settings):
+        return _FakeConnection()
+
+    async def fake_asn_info(_conn, period):
+        return {}
+
+    async def fake_measurements(_conn, _asn_info, _period):
+        for node_id, measurements in rows:
+            yield node_id, measurements
+
+    monkeypatch.setattr(scoring, "database_connection", fake_connection)
+    monkeypatch.setattr(scoring, asn_info_name, fake_asn_info)
+    monkeypatch.setattr(scoring, measurements_name, fake_measurements)
+
+
+@pytest.mark.asyncio
+async def test_compute_ccn_scores(monkeypatch, period):
+    rows = [
+        (
+            "node-1",
+            CcnMeasurements(
+                total_nodes=2,
+                nodes_with_identical_asn=1,
+                record_count=10,
+                total_score=0.8,
+            ),
         ),
-        CcnMetrics(
-            measured_at=dt.datetime(2022, 12, 26).timestamp(),
-            node_id="2",
-            url="https://api2.aleph.im",
-            asn=2,
-            as_name="Amazon Web Services",
-            base_latency=0.5,
-            metrics_latency=0.5,
-            aggregate_latency=0.5,
-            file_download_latency=0.5,
-            pending_messages=0,
-            eth_height_remaining=3,
+        (
+            "node-2",
+            CcnMeasurements(
+                total_nodes=2,
+                nodes_with_identical_asn=2,
+                record_count=10,
+                total_score=0.5,
+            ),
         ),
     ]
-
-    ccn_scores = compute_ccn_scores(ccn_metrics, latest_release=latest_release)
-    assert len(ccn_scores) == 2
-    assert ccn_scores[0].decentralization == 0.5
-
-
-def test_scoring_crn(latest_release):
-    crn_metrics = CrnMetrics(
-        measured_at=dt.datetime(2022, 12, 26).timestamp(),
-        node_id="1234",
-        url="https://aleph.sh",
-        asn=1,
-        as_name="Aleph.im",
-        base_latency=0.3,
-        diagnostic_vm_latency=0.7,
-        full_check_latency=0.7,
+    _patch_db(
+        monkeypatch,
+        asn_info_name="query_ccn_asn_info",
+        measurements_name="query_ccn_measurements",
+        rows=rows,
     )
 
-    crn_scores = compute_crn_scores([crn_metrics], latest_release=latest_release)
-    assert len(crn_scores) == 1
-    crn_score = crn_scores[0]
+    scores = await compute_ccn_scores(period=period)
 
-    assert crn_score.decentralization == 0
+    assert [s.node_id for s in scores] == ["node-1", "node-2"]
+    assert scores[0].total_score == 0.8
+    # Alone in its ASN: (1 - 1/2) ** 2
+    assert scores[0].decentralization == 0.25
+    # Shares its ASN with every node: (1 - 2/2) ** 2
+    assert scores[1].decentralization == 0
 
 
-def test_sanitize_semver():
-    regular_version = "v0.3.0"
-    sanitized_version = sanitize_semver(regular_version)
-    assert sanitized_version == regular_version
+@pytest.mark.asyncio
+async def test_compute_crn_scores(monkeypatch, period):
+    rows = [
+        (
+            "crn-1",
+            CrnMeasurements(
+                total_nodes=4,
+                nodes_with_identical_asn=1,
+                record_count=5,
+                total_score=0.9,
+            ),
+        ),
+    ]
+    _patch_db(
+        monkeypatch,
+        asn_info_name="query_crn_asn_info",
+        measurements_name="query_crn_measurements",
+        rows=rows,
+    )
 
-    version_with_tag = "v0.3.0-61-g98289a7"
-    sanitized_version = sanitize_semver(version_with_tag)
-    assert sanitized_version == "v0.3.0"
+    scores = await compute_crn_scores(period=period)
 
-    release_candidate = "v0.3.1-rc1"
-    sanitized_version = sanitize_semver(release_candidate)
-    assert sanitized_version == release_candidate
-
-    release_candidate_with_tag = "v0.3.1-rc1-9-g2400f55"
-    sanitized_version = sanitize_semver(release_candidate_with_tag)
-    assert sanitized_version == "v0.3.1-rc1"
+    assert len(scores) == 1
+    assert scores[0].node_id == "crn-1"
+    assert scores[0].total_score == 0.9
+    # (1 - 1/4) ** 2
+    assert scores[0].decentralization == 0.5625

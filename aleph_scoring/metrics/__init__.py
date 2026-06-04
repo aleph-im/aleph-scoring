@@ -158,23 +158,20 @@ async def measure_http_latency(
                         status=resp.status,
                         message="Wrong status code",
                     )
+                # Measure latency to the response headers, before reading the
+                # body, so body size does not skew the reading.
+                end = time.time()
                 if return_output:
-                    if return_json:
-                        output = await resp.json()
-                    else:
-                        output = await resp.text()
-                    end = time.time()
-                    logger.debug(f"Success when fetching {url}")
-                    return end - start, output
+                    output = await resp.json() if return_json else await resp.text()
                 else:
-                    end = time.time()
                     # Drain the body so the connection returns to the shared
                     # keep-alive pool. Releasing an unread response closes the
                     # connection, forcing a fresh handshake into the next
                     # measurement's latency.
                     await resp.read()
-                    logger.debug(f"Success when fetching {url}")
-                    return end - start, None
+                    output = None
+                logger.debug("Success when fetching %s", url)
+                return end - start, output
     except (
         aiohttp.ClientResponseError,
         aiohttp.ClientConnectorError,
@@ -354,15 +351,18 @@ async def get_ccn_metrics(
     url = node_info.url.url
     asn, as_name = lookup_asn(asn_db, url)
 
-    # Latency measurements must be sequential per node for accurate readings
+    # Latency measurements must be sequential per node for accurate readings.
+    # The metrics.json call returns both its latency and its content so the
+    # node is only queried once for it.
     base_latency_ipv4 = (
         await measure_http_latency(sessions.ipv4, f"{url}api/v0/info/public.json")
     )[0]
-    metrics_latency = (
-        await measure_http_latency(
-            sessions.any_ip, f"{url}metrics.json", settings.HTTP_REQUEST_TIMEOUT
-        )
-    )[0]
+    metrics_latency, json_text = await measure_http_latency(
+        sessions.any_ip,
+        f"{url}metrics.json",
+        settings.HTTP_REQUEST_TIMEOUT,
+        return_output=True,
+    )
     aggregate_latency = (
         await measure_http_latency(sessions.any_ip, CCN_AGGREGATE_PATH.format(url=url))
     )[0]
@@ -371,12 +371,6 @@ async def get_ccn_metrics(
             sessions.any_ip, CCN_FILE_DOWNLOAD_PATH.format(url=url)
         )
     )[0]
-    _, json_text = await measure_http_latency(
-        sessions.any_ip,
-        f"{url}metrics.json",
-        settings.HTTP_REQUEST_TIMEOUT,
-        return_output=True,
-    )
 
     if json_text is not None:
         json_object = CcnApiMetricsResponse.parse_obj(json_text)
@@ -546,6 +540,10 @@ async def collect_node_metrics(
 
 
 def _make_connector(family: socket.AddressFamily) -> aiohttp.TCPConnector:
+    # `limit` is kept above MAX_CONCURRENT_MEASUREMENTS so that idle keep-alive
+    # connections (held for `keepalive_timeout`) do not starve new hosts: with
+    # limit_per_host=1, up to MAX_CONCURRENT_MEASUREMENTS hosts are active at
+    # once while previously-measured connections linger in the pool.
     return aiohttp.TCPConnector(
         family=family,
         keepalive_timeout=30,
