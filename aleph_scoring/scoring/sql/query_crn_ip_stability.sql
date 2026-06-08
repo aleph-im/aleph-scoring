@@ -38,6 +38,7 @@ per_hour AS (
 ordered AS (
     SELECT
         node_id,
+        hour,
         ipv4,
         ipv6_prefix,
         LAG(ipv4) OVER (PARTITION BY node_id ORDER BY hour) AS prev_ipv4,
@@ -55,6 +56,11 @@ SELECT
         WHERE prev_ipv6_prefix IS NOT NULL
           AND ipv6_prefix IS NOT NULL
           AND ipv6_prefix <> prev_ipv6_prefix
-    ) AS ipv6_changes
+    ) AS ipv6_changes,
+    -- Most-recent non-null address, used to group duplicate CRNs.
+    (array_agg(ipv4 ORDER BY hour DESC) FILTER (WHERE ipv4 IS NOT NULL))[1]
+        AS ipv4,
+    (array_agg(ipv6_prefix ORDER BY hour DESC) FILTER (WHERE ipv6_prefix IS NOT NULL))[1]
+        AS ipv6_prefix
 FROM ordered
 GROUP BY node_id;

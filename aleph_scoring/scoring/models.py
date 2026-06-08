@@ -26,6 +26,8 @@ class CrnMeasurements(BaseNodeMeasurements):
     ipv4_changes: int = 0
     ipv6_changes: int = 0  # counted at the /64 prefix, not the full address
     ip_penalized: bool = False
+    # True when this node shares an IPv4 or IPv6 /64 with an older CRN.
+    duplicate_ip: bool = False
 
 
 class CcnMeasurements(BaseNodeMeasurements):
