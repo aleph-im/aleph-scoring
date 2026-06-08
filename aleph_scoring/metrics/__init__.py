@@ -339,7 +339,6 @@ class CcnApiMetricsResponse(BaseModel):
 
 
 async def get_ccn_metrics(
-    timeout_generator: TimeoutGenerator,
     asn_db: pyasn.pyasn,
     node_info: NodeInfo,
     *,
@@ -426,7 +425,6 @@ async def fetch_supported_features(
 
 
 async def get_crn_metrics(
-    timeout_generator: TimeoutGenerator,
     asn_db: pyasn.pyasn,
     node_info: NodeInfo,
     *,
@@ -510,13 +508,10 @@ async def collect_node_metrics(
     node_infos: Iterable[NodeInfo],
     # The sessions argument of get_ccn_metrics/get_crn_metrics is bound via
     # functools.partial before this is called, so the remaining signature is
-    # (timeout_generator, asn_db, node_info).
-    metrics_function: Callable[[TimeoutGenerator, pyasn.pyasn, NodeInfo], Awaitable[M]],
+    # (asn_db, node_info).
+    metrics_function: Callable[[pyasn.pyasn, NodeInfo], Awaitable[M]],
 ) -> Sequence[Union[M, BaseException]]:
     asn_db = get_asn_database()
-    timeout = timeout_generator(
-        total=60.0, connect=10.0, sock_connect=10.0, sock_read=60.0
-    )
     node_infos_list = list(node_infos)
     total = len(node_infos_list)
     completed = 0
@@ -527,7 +522,7 @@ async def collect_node_metrics(
         nonlocal completed
         async with semaphore:
             try:
-                return await metrics_function(timeout, asn_db, node_info)
+                return await metrics_function(asn_db, node_info)
             except Exception:
                 # gather(return_exceptions=True) would otherwise swallow this
                 # silently; log it before it is returned as a result value.

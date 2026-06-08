@@ -459,33 +459,36 @@ def backfill_scores(
     end_date = datetime.fromisoformat(end)
     interval = timedelta(hours=interval_hours)
 
-    current = start_date
-    # Inclusive of end_date: each iteration scores the half-open window
-    # [from_date, current) (the SQL upper bound is exclusive), and we want a
-    # final snapshot computed at end_date itself.
-    while current <= end_date:
-        from_date = current - settings.SCORE_METRICS_PERIOD
-        period = Period(from_date=from_date, to_date=current)
+    async def run_backfill() -> None:
+        current = start_date
+        # Inclusive of end_date: each iteration scores the half-open window
+        # [from_date, current) (the SQL upper bound is exclusive), and we want a
+        # final snapshot computed at end_date itself.
+        while current <= end_date:
+            from_date = current - settings.SCORE_METRICS_PERIOD
+            period = Period(from_date=from_date, to_date=current)
 
-        logger.info("Backfilling scores for %s", current.isoformat())
+            logger.info("Backfilling scores for %s", current.isoformat())
 
-        ccn_scores = asyncio.run(compute_ccn_scores(period=period))
-        crn_scores = asyncio.run(compute_crn_scores(period=period))
+            ccn_scores = await compute_ccn_scores(period=period)
+            crn_scores = await compute_crn_scores(period=period)
 
-        scores = NodeScores(ccn=ccn_scores, crn=crn_scores)
+            scores = NodeScores(ccn=ccn_scores, crn=crn_scores)
 
-        if output:
-            filename = output / f"scores_{current.strftime('%Y%m%dT%H%M%S')}.json"
-            with open(filename, "w") as fd:
-                fd.write(scores.json(indent=4))
-            logger.info("Saved %s", filename)
+            if output:
+                filename = output / f"scores_{current.strftime('%Y%m%dT%H%M%S')}.json"
+                with open(filename, "w") as fd:
+                    fd.write(scores.json(indent=4))
+                logger.info("Saved %s", filename)
 
-        if publish:
-            account = get_aleph_account()
-            asyncio.run(publish_scores_on_aleph(account, scores, period))
-            logger.info("Published scores for %s", current.isoformat())
+            if publish:
+                account = get_aleph_account()
+                await publish_scores_on_aleph(account, scores, period)
+                logger.info("Published scores for %s", current.isoformat())
 
-        current += interval
+            current += interval
+
+    asyncio.run(run_backfill())
 
 
 @app.command()
