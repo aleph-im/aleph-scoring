@@ -47,6 +47,14 @@ class Settings(BaseSettings):
     # scoring will not be performed if metrics are older than this threshold.
     MAX_METRICS_AGE: timedelta = timedelta(hours=3)
 
+    # A CRN must keep a stable IPv4 and IPv6. Over IP_STABILITY_WINDOW, a node
+    # is penalized (score forced to 0) if it lacks either address family or if
+    # either address changes at least IP_MAX_CHANGES times. Enforcement is off
+    # until enough IP history has accumulated.
+    IP_STABILITY_WINDOW: timedelta = timedelta(days=365)
+    IP_MAX_CHANGES: int = 2
+    IP_STABILITY_ENFORCED: bool = False
+
     class Config:
         env_file = ".env"
         env_prefix = "ALEPH_SCORING_"
