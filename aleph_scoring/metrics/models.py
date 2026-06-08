@@ -31,6 +31,12 @@ class CrnMetrics(AlephNodeMetrics):
     features: List[str] = Field(
         default_factory=list, description="List of features supported by the node"
     )
+    ipv4: Optional[str] = Field(
+        default=None, description="Resolved IPv4 address, used to detect IP changes"
+    )
+    ipv6: Optional[str] = Field(
+        default=None, description="Resolved IPv6 address, used to detect IP changes"
+    )
 
 
 class NodeMetrics(BaseModel):
