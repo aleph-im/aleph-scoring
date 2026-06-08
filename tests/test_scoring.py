@@ -292,3 +292,35 @@ async def test_compute_crn_scores_zeroes_duplicate_when_enforced(monkeypatch, pe
 
     assert scores[0].total_score == 0
     assert int(IssueCode.DUPLICATE_IP) in scores[0].codes
+
+
+@pytest.mark.asyncio
+async def test_compute_crn_scores_keeps_duplicate_when_not_enforced(
+    monkeypatch, period
+):
+    monkeypatch.setattr(scoring.settings, "DUPLICATE_IP_ENFORCED", False)
+    rows = [
+        (
+            "crn-dup",
+            CrnMeasurements(
+                total_nodes=2,
+                nodes_with_identical_asn=1,
+                record_count=5,
+                total_score=0.95,
+                duplicate_ip=True,
+            ),
+        ),
+    ]
+    _patch_db(
+        monkeypatch,
+        asn_info_name="query_crn_asn_info",
+        measurements_name="query_crn_measurements",
+        stability_name="query_crn_ip_stability",
+        rows=rows,
+    )
+
+    scores = await compute_crn_scores(period=period)
+
+    # Score is NOT zeroed, but the code is still published for early warning.
+    assert scores[0].total_score == 0.95
+    assert int(IssueCode.DUPLICATE_IP) in scores[0].codes
