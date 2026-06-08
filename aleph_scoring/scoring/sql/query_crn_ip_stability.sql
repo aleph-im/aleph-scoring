@@ -59,8 +59,8 @@ SELECT
     ) AS ipv6_changes,
     -- Most-recent non-null address, used to group duplicate CRNs.
     (array_agg(ipv4 ORDER BY hour DESC) FILTER (WHERE ipv4 IS NOT NULL))[1]
-        AS ipv4,
+        AS current_ipv4,
     (array_agg(ipv6_prefix ORDER BY hour DESC) FILTER (WHERE ipv6_prefix IS NOT NULL))[1]
-        AS ipv6_prefix
+        AS current_ipv6_prefix
 FROM ordered
 GROUP BY node_id;

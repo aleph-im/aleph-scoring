@@ -91,20 +91,27 @@ async def query_crn_ip_stability(
             "has_ipv6": row["has_ipv6"],
             "ipv4_changes": row["ipv4_changes"],
             "ipv6_changes": row["ipv6_changes"],
-            "ipv4": row["ipv4"],
-            "ipv6_prefix": row["ipv6_prefix"],
+            "ipv4": row["current_ipv4"],
+            "ipv6_prefix": row["current_ipv6_prefix"],
         }
         for row in values
     }
 
 
 def crn_registration_times(node_data: Dict[str, Any]) -> Dict[str, float]:
-    """Map each CRN node_id (hash) to its registration timestamp."""
-    return {
-        node["hash"]: node["time"]
-        for node in node_data.get("resource_nodes", [])
-        if isinstance(node.get("time"), (int, float))
-    }
+    """Map each CRN node_id (hash) to its registration timestamp.
+
+    Accepts numeric or numeric-string ``time`` values. Nodes whose time cannot
+    be parsed are omitted, which makes them sort last when choosing the keeper
+    of a duplicate group (so they never displace a node with a known time).
+    """
+    times: Dict[str, float] = {}
+    for node in node_data.get("resource_nodes", []):
+        try:
+            times[node["hash"]] = float(node["time"])
+        except (KeyError, TypeError, ValueError):
+            continue
+    return times
 
 
 def compute_duplicate_crns(
