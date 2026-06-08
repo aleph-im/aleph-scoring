@@ -7,6 +7,7 @@ from typing import AsyncIterable, Dict, List, Optional
 import asyncpg
 
 from aleph_scoring.config import settings
+from aleph_scoring.issue_codes import IssueCode
 from aleph_scoring.scoring.models import (
     CcnMeasurements,
     CcnScore,
@@ -118,6 +119,24 @@ def _ip_stability_fields(stability: Optional[Dict]) -> Dict:
         "ipv6_changes": ipv6_changes,
         "ip_penalized": ip_penalized,
     }
+
+
+def crn_score_codes(measurements: CrnMeasurements) -> List[IssueCode]:
+    """Derive scoring-reason codes from a CRN's aggregated measurements.
+
+    Emitted whenever the condition holds, independently of
+    IP_STABILITY_ENFORCED, so operators get early warning before scores drop.
+    """
+    codes: List[IssueCode] = []
+    if not measurements.has_ipv4:
+        codes.append(IssueCode.NO_IPV4)
+    if not measurements.has_ipv6:
+        codes.append(IssueCode.NO_IPV6)
+    if measurements.ipv4_changes >= settings.IP_MAX_CHANGES:
+        codes.append(IssueCode.IPV4_UNSTABLE)
+    if measurements.ipv6_changes >= settings.IP_MAX_CHANGES:
+        codes.append(IssueCode.IPV6_UNSTABLE)
+    return codes
 
 
 async def query_crn_measurements(
@@ -270,6 +289,7 @@ async def compute_crn_scores(
                 total_score=total_score,
                 decentralization=decentralization_score,
                 measurements=measurements,
+                codes=[int(c) for c in crn_score_codes(measurements)],
             )
         )
 

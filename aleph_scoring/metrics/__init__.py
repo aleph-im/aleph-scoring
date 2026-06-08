@@ -34,6 +34,7 @@ from pydantic import BaseModel, validator
 from urllib3.util import Url, parse_url
 
 from aleph_scoring.config import settings
+from aleph_scoring.issue_codes import IssueCode
 from aleph_scoring.metrics.asn import get_asn_database
 from aleph_scoring.metrics.models import (
     AlephNodeMetrics,
@@ -416,7 +417,75 @@ async def fetch_supported_features(
         return None
 
 
+def crn_measurement_codes(
+    *,
+    ipv4: Optional[str],
+    ipv6: Optional[str],
+    version: Optional[str],
+    base_latency: Optional[float],
+    base_latency_ipv4: Optional[float],
+    diagnostic_vm_latency: Optional[float],
+    full_check_latency: Optional[float],
+) -> List[IssueCode]:
+    """Derive per-measurement diagnostic codes from this cycle's results.
+
+    Codes are inferred from which probes returned no value, so no exception
+    plumbing is needed. Granularity is per-probe (a failure, not its cause).
+    """
+    codes: List[IssueCode] = []
+    if ipv4 is None:
+        codes.append(IssueCode.DNS_IPV4_FAIL)
+    if ipv6 is None:
+        codes.append(IssueCode.DNS_IPV6_FAIL)
+    if base_latency_ipv4 is None:
+        codes.append(IssueCode.IPV4_CHECK_FAILED)
+    if base_latency is None:
+        codes.append(IssueCode.IPV6_CHECK_FAILED)
+    if version is None:
+        codes.append(IssueCode.VERSION_UNAVAILABLE)
+    if diagnostic_vm_latency is None:
+        codes.append(IssueCode.DIAG_VM_UNREACHABLE)
+    if full_check_latency is None:
+        codes.append(IssueCode.FULL_CHECK_FAILED)
+    return codes
+
+
 async def get_crn_metrics(
+    asn_db: pyasn.pyasn,
+    node_info: NodeInfo,
+    *,
+    sessions: CrnSessions,
+) -> CrnMetrics:
+    """Fetch or measure the metrics of a Compute Resource Node.
+
+    Any unexpected error is caught and reported as a minimal record carrying
+    UNKNOWN_MEASUREMENT_ERROR, so a single node's failure neither aborts the run
+    nor silently drops the node from the published metrics.
+    """
+    try:
+        return await _measure_crn_metrics(asn_db, node_info, sessions=sessions)
+    except Exception:
+        logger.exception(
+            "Unexpected error measuring CRN %s (%s)",
+            node_info.hash,
+            node_info.url.url,
+        )
+        return CrnMetrics(
+            measured_at=datetime.now(tz=timezone.utc).timestamp(),
+            node_id=node_info.hash,
+            url=node_info.url.url,
+            asn=None,
+            as_name=None,
+            version=None,
+            base_latency=None,
+            base_latency_ipv4=None,
+            diagnostic_vm_latency=None,
+            full_check_latency=None,
+            codes=[int(IssueCode.UNKNOWN_MEASUREMENT_ERROR)],
+        )
+
+
+async def _measure_crn_metrics(
     asn_db: pyasn.pyasn,
     node_info: NodeInfo,
     *,
@@ -478,6 +547,16 @@ async def get_crn_metrics(
 
     measured_at = datetime.now(tz=timezone.utc)
 
+    codes = crn_measurement_codes(
+        ipv4=ipv4,
+        ipv6=ipv6,
+        version=version,
+        base_latency=base_latency,
+        base_latency_ipv4=base_latency_ipv4,
+        diagnostic_vm_latency=diagnostic_vm_latency,
+        full_check_latency=full_check_latency,
+    )
+
     return CrnMetrics(
         measured_at=measured_at.timestamp(),
         node_id=node_info.hash,
@@ -493,6 +572,7 @@ async def get_crn_metrics(
         features=features_supported or [],
         ipv4=ipv4,
         ipv6=ipv6,
+        codes=[int(c) for c in codes],
     )
 
 

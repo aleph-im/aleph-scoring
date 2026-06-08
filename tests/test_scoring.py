@@ -3,7 +3,12 @@ import datetime as dt
 import pytest
 
 from aleph_scoring import scoring
-from aleph_scoring.scoring import compute_ccn_scores, compute_crn_scores
+from aleph_scoring.issue_codes import IssueCode
+from aleph_scoring.scoring import (
+    compute_ccn_scores,
+    compute_crn_scores,
+    crn_score_codes,
+)
 from aleph_scoring.scoring.models import CcnMeasurements, CrnMeasurements
 from aleph_scoring.utils import Period
 
@@ -147,6 +152,32 @@ async def test_compute_crn_scores(monkeypatch, period):
 )
 def test_ip_stability_penalty_rule(stability, expected):
     assert scoring._ip_stability_fields(stability)["ip_penalized"] is expected
+
+
+def _crn_measurements(**overrides) -> CrnMeasurements:
+    base = dict(
+        total_nodes=1, nodes_with_identical_asn=1, record_count=1, total_score=0.9
+    )
+    base.update(overrides)
+    return CrnMeasurements(**base)
+
+
+@pytest.mark.parametrize(
+    "overrides, expected",
+    [
+        ({}, []),  # clean node -> no codes
+        ({"has_ipv4": False}, [IssueCode.NO_IPV4]),
+        ({"has_ipv6": False}, [IssueCode.NO_IPV6]),
+        ({"ipv4_changes": 2}, [IssueCode.IPV4_UNSTABLE]),
+        ({"ipv6_changes": 3}, [IssueCode.IPV6_UNSTABLE]),
+        (
+            {"has_ipv6": False, "ipv4_changes": 5},
+            [IssueCode.NO_IPV6, IssueCode.IPV4_UNSTABLE],
+        ),
+    ],
+)
+def test_crn_score_codes(overrides, expected):
+    assert crn_score_codes(_crn_measurements(**overrides)) == expected
 
 
 @pytest.mark.asyncio
