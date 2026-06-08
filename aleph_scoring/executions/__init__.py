@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import re
+import time
 from datetime import datetime, timezone
 from random import random, shuffle
 from typing import (
@@ -28,9 +29,17 @@ from aleph_scoring.executions.models import (
     CrnExecutions,
     NodeExecutions,
 )
-from aleph_scoring.metrics import seconds_since_process_has_started
 
 logger = logging.getLogger(__name__)
+
+
+def seconds_since_process_has_started() -> float:
+    """Returns the number of seconds since the process has started."""
+    import psutil
+
+    process = psutil.Process()
+    return time.time() - process.create_time()
+
 
 # Remove known test and diagnostic VMs
 VM_TO_IGNORES = [

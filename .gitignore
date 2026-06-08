@@ -12,3 +12,6 @@ __pycache__
 asn_db
 asn_db.bz2
 asnames.json
+
+# Nix build output
+result

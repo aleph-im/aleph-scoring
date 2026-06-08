@@ -88,10 +88,14 @@ async def query_crn_measurements(
     )
 
     for record in values:
-        row = dict(record)
-        row.update(asn_info[record["node_id"]])
         node_id = record["node_id"]
         assert isinstance(node_id, str)
+        node_asn_info = asn_info.get(node_id)
+        if node_asn_info is None:
+            logger.warning("No ASN info for CRN node %s, skipping", node_id)
+            continue
+        row = dict(record)
+        row.update(node_asn_info)
         yield node_id, CrnMeasurements.parse_obj(row)
 
 
@@ -266,9 +270,14 @@ async def query_ccn_measurements(
     )
 
     for record in values:
+        node_id = record["node_id"]
+        node_asn_info = asn_info.get(node_id)
+        if node_asn_info is None:
+            logger.warning("No ASN info for CCN node %s, skipping", node_id)
+            continue
         row = dict(record)
-        row.update(asn_info[record["node_id"]])
-        yield record["node_id"], CcnMeasurements.parse_obj(row)
+        row.update(node_asn_info)
+        yield node_id, CcnMeasurements.parse_obj(row)
 
 
 async def compute_ccn_scores(

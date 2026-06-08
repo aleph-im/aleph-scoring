@@ -25,6 +25,9 @@ USER source
 RUN python3 -m venv /opt/venv
 
 RUN /opt/venv/bin/pip install --upgrade pip
+# setuptools>=81 removes pkg_resources, which web3 (via superfluid/aleph-sdk)
+# still imports. Pin until aleph-sdk-python drops that dependency.
+RUN /opt/venv/bin/pip install "setuptools<81"
 RUN /opt/venv/bin/pip install /opt/scoring/
 
 WORKDIR /opt/scoring
@@ -44,4 +47,5 @@ VOLUME "/srv/asn"
 RUN /opt/venv/bin/python -m aleph_scoring --help
 
 ENTRYPOINT ["/opt/venv/bin/python", "-m", "aleph_scoring"]
-CMD ["measure-on-schedule", "--publish"]
+#CMD ["measure-on-schedule", "--publish"]
+CMD ["measure", "--publish"]
