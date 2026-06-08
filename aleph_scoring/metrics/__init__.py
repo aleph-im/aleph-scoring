@@ -294,14 +294,6 @@ async def ping_vm(crn_url: str, vm_hash: ItemHash) -> Optional[float]:
     return min_response_time
 
 
-def seconds_since_process_has_started() -> float:
-    """Returns the number of seconds since the process has started."""
-    import psutil
-
-    process = psutil.Process()
-    return time.time() - process.create_time()
-
-
 def lookup_asn(
     asn_db: pyasn.pyasn, url: str
 ) -> Union[Tuple[str, str], Tuple[None, None]]:
@@ -390,7 +382,7 @@ async def get_ccn_metrics(
         aggregate_latency=aggregate_latency,
         file_download_latency=file_download_latency,
         txs_total=json_object.pyaleph_status_sync_pending_txs_total,
-        pending_messages=json_object.pyaleph_status_sync_pending_messages_total,  # noqa:E501
+        pending_messages=json_object.pyaleph_status_sync_pending_messages_total,
         eth_height_remaining=json_object.pyaleph_status_chain_eth_height_remaining_total,
     )
 
@@ -651,8 +643,8 @@ async def collect_all_node_metrics() -> NodeMetrics:
     aleph_nodes = await get_aleph_nodes()
     logger.debug("Fetched node data")
 
-    # CRN and CRN metrics are measured concurrently since they are randomly
-    # scheduled over the next hour usinc `asyncio.sleep` in each node coroutine.
+    # CCN and CRN metrics are measured concurrently; within each, per-node
+    # measurements are bounded by a semaphore in collect_node_metrics.
     ccn_metrics, crn_metrics = await asyncio.gather(
         collect_all_ccn_metrics(aleph_nodes),
         collect_all_crn_metrics(aleph_nodes),
