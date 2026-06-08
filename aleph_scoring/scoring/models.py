@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from pydantic import BaseModel, ConstrainedFloat
+from pydantic import BaseModel, ConstrainedFloat, Field
 
 from aleph_scoring.utils import Period
 
@@ -44,6 +44,10 @@ class CcnScore(AlephNodeScore):
 
 class CrnScore(AlephNodeScore):
     measurements: CrnMeasurements
+    codes: List[int] = Field(
+        default_factory=list,
+        description="Numeric diagnostic codes explaining the score (see IssueCode)",
+    )
 
 
 class NodeScores(BaseModel):

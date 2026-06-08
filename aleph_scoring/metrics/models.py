@@ -37,6 +37,10 @@ class CrnMetrics(AlephNodeMetrics):
     ipv6: Optional[str] = Field(
         default=None, description="Resolved IPv6 address, used to detect IP changes"
     )
+    codes: List[int] = Field(
+        default_factory=list,
+        description="Numeric diagnostic codes for failed probes (see IssueCode)",
+    )
 
 
 class NodeMetrics(BaseModel):
