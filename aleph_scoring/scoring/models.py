@@ -24,7 +24,7 @@ class CrnMeasurements(BaseNodeMeasurements):
     has_ipv4: bool = True
     has_ipv6: bool = True
     ipv4_changes: int = 0
-    ipv6_changes: int = 0
+    ipv6_changes: int = 0  # counted at the /64 prefix, not the full address
     ip_penalized: bool = False
 
 
