@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import AsyncIterable, Dict, List
+from typing import AsyncIterable, Dict, List, Optional
 
 import asyncpg
 
@@ -64,9 +64,66 @@ async def query_crn_asn_info(
     return result
 
 
+async def query_crn_ip_stability(
+    conn: asyncpg.connection, period: Period
+) -> Dict[str, Dict]:
+    """Query per-CRN IPv4/IPv6 presence and change counts over the window.
+
+    The detection window (IP_STABILITY_WINDOW) is independent of the scoring
+    period and ends at the period's upper bound.
+    """
+    sql = read_sql_file("query_crn_ip_stability.sql")
+
+    window_start = period.to_date - settings.IP_STABILITY_WINDOW
+    values = await conn.fetch(
+        sql,
+        settings.ALLOWED_METRICS_SENDER,
+        settings.ALEPH_POST_TYPE_METRICS,
+        window_start.replace(tzinfo=None),
+        period.to_date.replace(tzinfo=None),
+    )
+
+    return {
+        row["node_id"]: {
+            "has_ipv4": row["has_ipv4"],
+            "has_ipv6": row["has_ipv6"],
+            "ipv4_changes": row["ipv4_changes"],
+            "ipv6_changes": row["ipv6_changes"],
+        }
+        for row in values
+    }
+
+
+def _ip_stability_fields(stability: Optional[Dict]) -> Dict:
+    """Derive the CrnMeasurements IP fields, including the penalty flag.
+
+    Missing stability data defaults to non-penalizing so nodes are never zeroed
+    before enough IP history has accumulated.
+    """
+    stability = stability or {}
+    has_ipv4 = stability.get("has_ipv4", True)
+    has_ipv6 = stability.get("has_ipv6", True)
+    ipv4_changes = stability.get("ipv4_changes", 0)
+    ipv6_changes = stability.get("ipv6_changes", 0)
+    ip_penalized = (
+        not has_ipv4
+        or not has_ipv6
+        or ipv4_changes >= settings.IP_MAX_CHANGES
+        or ipv6_changes >= settings.IP_MAX_CHANGES
+    )
+    return {
+        "has_ipv4": has_ipv4,
+        "has_ipv6": has_ipv6,
+        "ipv4_changes": ipv4_changes,
+        "ipv6_changes": ipv6_changes,
+        "ip_penalized": ip_penalized,
+    }
+
+
 async def query_crn_measurements(
     conn: asyncpg.connection,
     asn_info: Dict,
+    ip_stability: Dict,
     period: Period,
 ) -> AsyncIterable[tuple[str, CrnMeasurements]]:
     sql = read_sql_file("dev/neo/query_crn_scores.template.sql")
@@ -96,6 +153,7 @@ async def query_crn_measurements(
             continue
         row = dict(record)
         row.update(node_asn_info)
+        row.update(_ip_stability_fields(ip_stability.get(node_id)))
         yield node_id, CrnMeasurements.parse_obj(row)
 
 
@@ -105,11 +163,13 @@ async def compute_crn_scores(
     conn = await database_connection(settings)
 
     asn_info: Dict[str, Dict] = await query_crn_asn_info(conn, period=period)
+    ip_stability: Dict[str, Dict] = await query_crn_ip_stability(conn, period=period)
 
     result = []
     async for node_id, measurements in query_crn_measurements(
         conn,
         asn_info,
+        ip_stability,
         period,
     ):
         # # This contains custom logic on the scores
@@ -184,6 +244,18 @@ async def compute_crn_scores(
         #     )
 
         total_score = Score(measurements.total_score)
+
+        if settings.IP_STABILITY_ENFORCED and measurements.ip_penalized:
+            logger.info(
+                "Zeroing CRN %s for IP instability "
+                "(has_ipv4=%s, has_ipv6=%s, ipv4_changes=%d, ipv6_changes=%d)",
+                node_id,
+                measurements.has_ipv4,
+                measurements.has_ipv6,
+                measurements.ipv4_changes,
+                measurements.ipv6_changes,
+            )
+            total_score = Score(0)
 
         decentralization_score = Score(
             (1 - (measurements.nodes_with_identical_asn / measurements.total_nodes))

@@ -426,6 +426,10 @@ async def get_crn_metrics(
     url = node_info.url.url
     asn, as_name = lookup_asn(asn_db, url)
 
+    # Record the resolved IPs so IP stability can be scored over time
+    ipv4 = get_ipv4(url)
+    ipv6 = get_ipv6(url)
+
     # Get the version (sequential with retry backoff)
     version: Optional[str] = None
     for attempt in range(3):
@@ -487,6 +491,8 @@ async def get_crn_metrics(
         full_check_latency=full_check_latency,
         diagnostic_vm_ping_latency=diagnostic_vm_ping_latency,
         features=features_supported or [],
+        ipv4=ipv4,
+        ipv6=ipv6,
     )
 
 

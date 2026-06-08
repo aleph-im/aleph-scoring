@@ -19,7 +19,13 @@ class BaseNodeMeasurements(BaseModel):
 
 
 class CrnMeasurements(BaseNodeMeasurements):
-    pass
+    # IP stability inputs. Defaults are non-penalizing so a node with no
+    # recorded IP history yet is never zeroed during the bootstrap period.
+    has_ipv4: bool = True
+    has_ipv6: bool = True
+    ipv4_changes: int = 0
+    ipv6_changes: int = 0  # counted at the /64 prefix, not the full address
+    ip_penalized: bool = False
 
 
 class CcnMeasurements(BaseNodeMeasurements):
