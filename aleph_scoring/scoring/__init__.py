@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, AsyncIterable, Dict, List, Optional, Set
@@ -236,10 +237,27 @@ async def compute_crn_scores(
     asn_info: Dict[str, Dict] = await query_crn_asn_info(conn, period=period)
     ip_stability: Dict[str, Dict] = await query_crn_ip_stability(conn, period=period)
 
-    node_data = await get_aleph_nodes()
+    try:
+        node_data = await get_aleph_nodes()
+    except Exception:
+        logger.exception(
+            "Could not fetch node data; skipping duplicate-IP detection this run"
+        )
+        node_data = {}
     duplicate_ids = compute_duplicate_crns(
         ip_stability, crn_registration_times(node_data)
     )
+
+    # Duplicates are excluded from the per-ASN "identical" count so a Sybil
+    # cluster cannot make its ASN look crowded and drag down honest nodes'
+    # decentralization. total_nodes is intentionally left untouched.
+    duplicate_asn_counts: Counter[int] = Counter()
+    if settings.DUPLICATE_IP_ENFORCED:
+        duplicate_asn_counts = Counter(
+            asn_info[nid]["asn"]
+            for nid in duplicate_ids
+            if nid in asn_info and asn_info[nid].get("asn") is not None
+        )
 
     result = []
     async for node_id, measurements in query_crn_measurements(
@@ -338,10 +356,16 @@ async def compute_crn_scores(
             logger.info("Zeroing CRN %s as a duplicate-IP node", node_id)
             total_score = Score(0)
 
-        decentralization_score = Score(
-            (1 - (measurements.nodes_with_identical_asn / measurements.total_nodes))
-            ** 2
-        )
+        if settings.DUPLICATE_IP_ENFORCED and measurements.duplicate_ip:
+            decentralization_score = Score(0)
+        else:
+            node_asn = asn_info.get(node_id, {}).get("asn")
+            identical = measurements.nodes_with_identical_asn
+            if node_asn is not None:
+                identical -= duplicate_asn_counts[node_asn]
+            decentralization_score = Score(
+                (1 - (identical / measurements.total_nodes)) ** 2
+            )
 
         # total_score = Score((performance_score * version_score) ** (1 / 2))
 
