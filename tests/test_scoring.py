@@ -325,3 +325,80 @@ async def test_compute_crn_scores_keeps_duplicate_when_not_enforced(
     # Score is NOT zeroed, but the code is still published for early warning.
     assert scores[0].total_score == 0.95
     assert int(IssueCode.DUPLICATE_IP) in scores[0].codes
+
+
+@pytest.mark.asyncio
+async def test_compute_crn_scores_skips_dedup_when_node_fetch_fails(
+    monkeypatch, period
+):
+    monkeypatch.setattr(scoring.settings, "DUPLICATE_IP_ENFORCED", True)
+    rows = [
+        (
+            "crn-1",
+            CrnMeasurements(
+                total_nodes=2,
+                nodes_with_identical_asn=1,
+                record_count=5,
+                total_score=0.9,
+            ),
+        ),
+    ]
+    _patch_db(
+        monkeypatch,
+        asn_info_name="query_crn_asn_info",
+        measurements_name="query_crn_measurements",
+        stability_name="query_crn_ip_stability",
+        rows=rows,
+    )
+
+    async def boom():
+        raise RuntimeError("node API unreachable")
+
+    monkeypatch.setattr(scoring, "get_aleph_nodes", boom)
+
+    # Scoring still completes; duplicate detection is simply skipped.
+    scores = await compute_crn_scores(period=period)
+
+    assert len(scores) == 1
+    assert scores[0].total_score == 0.9
+    assert int(IssueCode.DUPLICATE_IP) not in scores[0].codes
+
+
+@pytest.mark.asyncio
+async def test_decentralization_excludes_duplicates_from_asn(monkeypatch, period):
+    # ASN 1234 has 4 nodes: 2 duplicates + 2 honest. The duplicates are
+    # subtracted from the honest node's identical count: (1 - (4 - 2) / 4) ** 2.
+    monkeypatch.setattr(scoring.settings, "DUPLICATE_IP_ENFORCED", True)
+    asn_entry = {"asn": 1234, "total_nodes": 4, "nodes_with_identical_asn": 4}
+    asn_info = {"honest1": asn_entry, "dup1": asn_entry, "dup2": asn_entry}
+    rows = [
+        (
+            "honest1",
+            CrnMeasurements(
+                total_nodes=4,
+                nodes_with_identical_asn=4,
+                record_count=5,
+                total_score=0.9,
+            ),
+        ),
+    ]
+    _patch_db(
+        monkeypatch,
+        asn_info_name="query_crn_asn_info",
+        measurements_name="query_crn_measurements",
+        stability_name="query_crn_ip_stability",
+        rows=rows,
+    )
+
+    async def fake_asn_info(_conn, period):
+        return asn_info
+
+    monkeypatch.setattr(scoring, "query_crn_asn_info", fake_asn_info)
+    monkeypatch.setattr(
+        scoring, "compute_duplicate_crns", lambda ip, t: {"dup1", "dup2"}
+    )
+
+    scores = await compute_crn_scores(period=period)
+
+    assert scores[0].node_id == "honest1"
+    assert scores[0].decentralization == 0.25  # (1 - (4 - 2) / 4) ** 2

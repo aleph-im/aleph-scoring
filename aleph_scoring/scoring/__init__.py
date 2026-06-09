@@ -251,7 +251,7 @@ async def compute_crn_scores(
     # Duplicates are excluded from the per-ASN "identical" count so a Sybil
     # cluster cannot make its ASN look crowded and drag down honest nodes'
     # decentralization. total_nodes is intentionally left untouched.
-    duplicate_asn_counts: "Counter[int]" = Counter()
+    duplicate_asn_counts: Counter[int] = Counter()
     if settings.DUPLICATE_IP_ENFORCED:
         duplicate_asn_counts = Counter(
             asn_info[nid]["asn"]
