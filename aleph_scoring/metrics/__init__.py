@@ -388,6 +388,34 @@ async def get_ccn_metrics(
     )
 
 
+async def fetch_node_hash(
+    session: aiohttp.ClientSession, node_url: str, timeout_seconds: int
+) -> Optional[str]:
+    """Fetch the node_hash the node reports at /status/config.
+
+    Used to verify a node really serves its own identity: a node that points
+    its domain at someone else's server returns that server's node_hash.
+    """
+    url = f"{node_url}status/config"
+    try:
+        async with asyncio.timeout(timeout_seconds):
+            async with session.get(url) as resp:
+                resp.raise_for_status()
+                config = await resp.json()
+                return config.get("node_hash")
+    except (
+        aiohttp.ClientResponseError,
+        aiohttp.ClientConnectorError,
+        aiohttp.ServerDisconnectedError,
+        aiohttp.ClientOSError,
+        ConnectionResetError,
+        OSError,
+        asyncio.TimeoutError,
+    ) as e:
+        logger.debug("Error fetching config from %s: %s: %s", url, type(e).__name__, e)
+        return None
+
+
 async def fetch_supported_features(
     session: aiohttp.ClientSession, node_url: str, timeout_seconds: int
 ) -> Optional[List[str]]:
@@ -544,6 +572,7 @@ async def _measure_crn_metrics(
             sessions.ipv4, f"{url}about/login", expected_status=401
         )
     )[0]
+    config_node_hash = await fetch_node_hash(sessions.any_ip, url, timeout_seconds=5)
 
     measured_at = datetime.now(tz=timezone.utc)
 
@@ -572,6 +601,7 @@ async def _measure_crn_metrics(
         features=features_supported or [],
         ipv4=ipv4,
         ipv6=ipv6,
+        config_node_hash=config_node_hash,
         codes=[int(c) for c in codes],
     )
 

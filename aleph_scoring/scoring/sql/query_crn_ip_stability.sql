@@ -18,7 +18,9 @@ WITH ip_observations AS (
             WHEN node ->> 'ipv6' IS NOT NULL AND node ->> 'ipv6' <> ''
             THEN network(set_masklen((node ->> 'ipv6')::inet, 64))::text
             ELSE NULL
-        END AS ipv6_prefix
+        END AS ipv6_prefix,
+        -- The node served its own registered hash at /status/config.
+        ((node ->> 'config_node_hash') = (node ->> 'node_id')) AS verified
     FROM posts,
          jsonb_array_elements(content -> 'metrics' -> 'crn') node
     WHERE owner = $1
@@ -31,7 +33,8 @@ per_hour AS (
         node_id,
         hour,
         mode() WITHIN GROUP (ORDER BY ipv4) AS ipv4,
-        mode() WITHIN GROUP (ORDER BY ipv6_prefix) AS ipv6_prefix
+        mode() WITHIN GROUP (ORDER BY ipv6_prefix) AS ipv6_prefix,
+        bool_or(verified) AS verified
     FROM ip_observations
     GROUP BY node_id, hour
 ),
@@ -41,6 +44,7 @@ ordered AS (
         hour,
         ipv4,
         ipv6_prefix,
+        verified,
         LAG(ipv4) OVER (PARTITION BY node_id ORDER BY hour) AS prev_ipv4,
         LAG(ipv6_prefix) OVER (PARTITION BY node_id ORDER BY hour) AS prev_ipv6_prefix
     FROM per_hour
@@ -61,6 +65,8 @@ SELECT
     (array_agg(ipv4 ORDER BY hour DESC) FILTER (WHERE ipv4 IS NOT NULL))[1]
         AS current_ipv4,
     (array_agg(ipv6_prefix ORDER BY hour DESC) FILTER (WHERE ipv6_prefix IS NOT NULL))[1]
-        AS current_ipv6_prefix
+        AS current_ipv6_prefix,
+    -- True if the node ever served its own hash in the window.
+    coalesce(bool_or(verified), false) AS verified
 FROM ordered
 GROUP BY node_id;

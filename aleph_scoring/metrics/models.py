@@ -37,6 +37,11 @@ class CrnMetrics(AlephNodeMetrics):
     ipv6: Optional[str] = Field(
         default=None, description="Resolved IPv6 address, used to detect IP changes"
     )
+    config_node_hash: Optional[str] = Field(
+        default=None,
+        description="node_hash reported by the node's /status/config endpoint; "
+        "used to verify the node really serves its own identity",
+    )
     codes: List[int] = Field(
         default_factory=list,
         description="Numeric diagnostic codes for failed probes (see IssueCode)",
