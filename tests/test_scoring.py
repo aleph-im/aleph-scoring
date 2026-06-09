@@ -291,6 +291,7 @@ async def test_compute_crn_scores_zeroes_duplicate_when_enforced(monkeypatch, pe
     scores = await compute_crn_scores(period=period)
 
     assert scores[0].total_score == 0
+    assert scores[0].decentralization == 0  # zeroed alongside the score
     assert int(IssueCode.DUPLICATE_IP) in scores[0].codes
 
 
