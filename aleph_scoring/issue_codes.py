@@ -20,6 +20,7 @@ class IssueCode(IntEnum):
     NO_IPV6 = 1002
     IPV4_UNSTABLE = 1003
     IPV6_UNSTABLE = 1004
+    DUPLICATE_IP = 1005
 
     # 2xxx -- per-measurement failures (this measurement cycle)
     DNS_IPV4_FAIL = 2001
@@ -37,6 +38,10 @@ ISSUE_DESCRIPTIONS: Dict[IssueCode, str] = {
     IssueCode.NO_IPV6: "No IPv6 address observed for the node in the stability window.",
     IssueCode.IPV4_UNSTABLE: "The node's IPv4 address changed too many times.",
     IssueCode.IPV6_UNSTABLE: "The node's IPv6 /64 prefix changed too many times.",
+    IssueCode.DUPLICATE_IP: (
+        "Shares an IPv4 or IPv6 /64 with an older CRN; only the "
+        "earliest-registered node on a given address is scored."
+    ),
     IssueCode.DNS_IPV4_FAIL: "The node hostname did not resolve to an IPv4 address.",
     IssueCode.DNS_IPV6_FAIL: "The node hostname did not resolve to an IPv6 address.",
     IssueCode.IPV4_CHECK_FAILED: "The IPv4 reachability check (about/login) failed.",

@@ -2,12 +2,13 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import AsyncIterable, Dict, List, Optional
+from typing import Any, AsyncIterable, Dict, List, Optional, Set
 
 import asyncpg
 
 from aleph_scoring.config import settings
 from aleph_scoring.issue_codes import IssueCode
+from aleph_scoring.metrics import get_aleph_nodes
 from aleph_scoring.scoring.models import (
     CcnMeasurements,
     CcnScore,
@@ -90,9 +91,56 @@ async def query_crn_ip_stability(
             "has_ipv6": row["has_ipv6"],
             "ipv4_changes": row["ipv4_changes"],
             "ipv6_changes": row["ipv6_changes"],
+            "ipv4": row["current_ipv4"],
+            "ipv6_prefix": row["current_ipv6_prefix"],
         }
         for row in values
     }
+
+
+def crn_registration_times(node_data: Dict[str, Any]) -> Dict[str, float]:
+    """Map each CRN node_id (hash) to its registration timestamp.
+
+    Accepts numeric or numeric-string ``time`` values. Nodes whose time cannot
+    be parsed are omitted, which makes them sort last when choosing the keeper
+    of a duplicate group (so they never displace a node with a known time).
+    """
+    times: Dict[str, float] = {}
+    for node in node_data.get("resource_nodes", []):
+        try:
+            times[node["hash"]] = float(node["time"])
+        except (KeyError, TypeError, ValueError):
+            continue
+    return times
+
+
+def compute_duplicate_crns(
+    ip_stability: Dict[str, Dict],
+    registration_times: Dict[str, float],
+) -> Set[str]:
+    """Return node_ids that share an IPv4 or IPv6 /64 with an older CRN.
+
+    For each address (IPv4 and IPv6 /64 grouped independently), the
+    earliest-registered node keeps its score and the rest are flagged. A node is
+    penalized if it is not the keeper in its IPv4 cohort or its /64 cohort.
+    Nodes with an unknown registration time sort last, so they never win a tie.
+    """
+    penalized: Set[str] = set()
+    for key in ("ipv4", "ipv6_prefix"):
+        groups: Dict[str, List[str]] = {}
+        for node_id, info in ip_stability.items():
+            address = info.get(key)
+            if address:
+                groups.setdefault(address, []).append(node_id)
+        for members in groups.values():
+            if len(members) < 2:
+                continue
+            keeper = min(
+                members,
+                key=lambda n: registration_times.get(n, float("inf")),
+            )
+            penalized.update(n for n in members if n != keeper)
+    return penalized
 
 
 def _ip_stability_fields(stability: Optional[Dict]) -> Dict:
@@ -136,6 +184,8 @@ def crn_score_codes(measurements: CrnMeasurements) -> List[IssueCode]:
         codes.append(IssueCode.IPV4_UNSTABLE)
     if measurements.ipv6_changes >= settings.IP_MAX_CHANGES:
         codes.append(IssueCode.IPV6_UNSTABLE)
+    if measurements.duplicate_ip:
+        codes.append(IssueCode.DUPLICATE_IP)
     return codes
 
 
@@ -143,6 +193,7 @@ async def query_crn_measurements(
     conn: asyncpg.connection,
     asn_info: Dict,
     ip_stability: Dict,
+    duplicate_ids: Set[str],
     period: Period,
 ) -> AsyncIterable[tuple[str, CrnMeasurements]]:
     sql = read_sql_file("dev/neo/query_crn_scores.template.sql")
@@ -173,6 +224,7 @@ async def query_crn_measurements(
         row = dict(record)
         row.update(node_asn_info)
         row.update(_ip_stability_fields(ip_stability.get(node_id)))
+        row["duplicate_ip"] = node_id in duplicate_ids
         yield node_id, CrnMeasurements.parse_obj(row)
 
 
@@ -184,11 +236,17 @@ async def compute_crn_scores(
     asn_info: Dict[str, Dict] = await query_crn_asn_info(conn, period=period)
     ip_stability: Dict[str, Dict] = await query_crn_ip_stability(conn, period=period)
 
+    node_data = await get_aleph_nodes()
+    duplicate_ids = compute_duplicate_crns(
+        ip_stability, crn_registration_times(node_data)
+    )
+
     result = []
     async for node_id, measurements in query_crn_measurements(
         conn,
         asn_info,
         ip_stability,
+        duplicate_ids,
         period,
     ):
         # # This contains custom logic on the scores
@@ -274,6 +332,10 @@ async def compute_crn_scores(
                 measurements.ipv4_changes,
                 measurements.ipv6_changes,
             )
+            total_score = Score(0)
+
+        if settings.DUPLICATE_IP_ENFORCED and measurements.duplicate_ip:
+            logger.info("Zeroing CRN %s as a duplicate-IP node", node_id)
             total_score = Score(0)
 
         decentralization_score = Score(

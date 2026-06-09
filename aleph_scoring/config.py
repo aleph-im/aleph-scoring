@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     IP_MAX_CHANGES: int = 2
     IP_STABILITY_ENFORCED: bool = False
 
+    # When several CRNs share an IPv4 or an IPv6 /64, only the earliest-registered
+    # one is scored; the rest are treated as duplicates and forced to 0.
+    DUPLICATE_IP_ENFORCED: bool = True
+
     class Config:
         env_file = ".env"
         env_prefix = "ALEPH_SCORING_"
