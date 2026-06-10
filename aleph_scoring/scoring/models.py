@@ -1,6 +1,8 @@
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConstrainedFloat, Field
+
+CrnStatus = Literal["active", "inactive", "dead"]
 
 from aleph_scoring.utils import Period
 
@@ -28,6 +30,9 @@ class CrnMeasurements(BaseNodeMeasurements):
     ip_penalized: bool = False
     # True when this node shares an IPv4 or IPv6 /64 with an older CRN.
     duplicate_ip: bool = False
+    # Liveness: active (proving CRN now), inactive (recently stopped), dead
+    # (no proof for the dead-node window).
+    status: CrnStatus = "active"
 
 
 class CcnMeasurements(BaseNodeMeasurements):
@@ -46,6 +51,7 @@ class CcnScore(AlephNodeScore):
 
 class CrnScore(AlephNodeScore):
     measurements: CrnMeasurements
+    status: CrnStatus = "active"
     codes: List[int] = Field(
         default_factory=list,
         description="Numeric diagnostic codes explaining the score (see IssueCode)",

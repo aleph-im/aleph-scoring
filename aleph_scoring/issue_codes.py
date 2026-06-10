@@ -21,6 +21,8 @@ class IssueCode(IntEnum):
     IPV4_UNSTABLE = 1003
     IPV6_UNSTABLE = 1004
     DUPLICATE_IP = 1005
+    NODE_DEAD = 1006
+    NODE_INACTIVE = 1007
 
     # 2xxx -- per-measurement failures (this measurement cycle)
     DNS_IPV4_FAIL = 2001
@@ -42,6 +44,10 @@ ISSUE_DESCRIPTIONS: Dict[IssueCode, str] = {
         "Shares an IPv4 or IPv6 /64 with an older CRN; only the "
         "earliest-registered node on a given address is scored."
     ),
+    IssueCode.NODE_DEAD: (
+        "No proof of being a real CRN for 24h; treated as dead and scored 0."
+    ),
+    IssueCode.NODE_INACTIVE: "The node is not currently proving it is a CRN.",
     IssueCode.DNS_IPV4_FAIL: "The node hostname did not resolve to an IPv4 address.",
     IssueCode.DNS_IPV6_FAIL: "The node hostname did not resolve to an IPv6 address.",
     IssueCode.IPV4_CHECK_FAILED: "The IPv4 reachability check (about/login) failed.",

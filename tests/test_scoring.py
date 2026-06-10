@@ -9,6 +9,7 @@ from aleph_scoring.scoring import (
     compute_crn_scores,
     compute_duplicate_crns,
     crn_score_codes,
+    crn_status,
 )
 from aleph_scoring.scoring.models import CcnMeasurements, CrnMeasurements
 from aleph_scoring.utils import Period
@@ -56,8 +57,16 @@ def _patch_db(
         async def fake_nodes():
             return {"resource_nodes": []}
 
+        async def fake_liveness(_conn, period):
+            # Every node proves liveness, so status defaults to active in tests
+            # that don't care about it.
+            return {
+                nid: {"has_recent_proof": True, "latest_proof": True} for nid, _ in rows
+            }
+
         monkeypatch.setattr(scoring, stability_name, fake_stability)
         monkeypatch.setattr(scoring, "get_aleph_nodes", fake_nodes)
+        monkeypatch.setattr(scoring, "query_crn_liveness", fake_liveness)
 
 
 @pytest.mark.asyncio
@@ -421,3 +430,78 @@ async def test_decentralization_excludes_duplicates_from_asn(monkeypatch, period
 
     assert scores[0].node_id == "honest1"
     assert scores[0].decentralization == 0.25  # (1 - (4 - 2) / 4) ** 2
+
+
+@pytest.mark.parametrize(
+    "liveness, expected",
+    [
+        (None, "dead"),  # no entry -> never measured recently
+        ({"has_recent_proof": False, "latest_proof": False}, "dead"),
+        ({"has_recent_proof": True, "latest_proof": True}, "active"),
+        ({"has_recent_proof": True, "latest_proof": False}, "inactive"),
+    ],
+)
+def test_crn_status(liveness, expected):
+    assert crn_status(liveness) == expected
+
+
+@pytest.mark.asyncio
+async def test_compute_crn_scores_zeroes_dead_when_enforced(monkeypatch, period):
+    monkeypatch.setattr(scoring.settings, "DEAD_NODE_ENFORCED", True)
+    rows = [
+        (
+            "crn-dead",
+            CrnMeasurements(
+                total_nodes=2,
+                nodes_with_identical_asn=1,
+                record_count=5,
+                total_score=0.95,
+                status="dead",
+            ),
+        ),
+    ]
+    _patch_db(
+        monkeypatch,
+        asn_info_name="query_crn_asn_info",
+        measurements_name="query_crn_measurements",
+        stability_name="query_crn_ip_stability",
+        rows=rows,
+    )
+
+    scores = await compute_crn_scores(period=period)
+
+    assert scores[0].total_score == 0
+    assert scores[0].decentralization == 0
+    assert scores[0].status == "dead"
+    assert int(IssueCode.NODE_DEAD) in scores[0].codes
+
+
+@pytest.mark.asyncio
+async def test_compute_crn_scores_keeps_dead_when_not_enforced(monkeypatch, period):
+    monkeypatch.setattr(scoring.settings, "DEAD_NODE_ENFORCED", False)
+    rows = [
+        (
+            "crn-dead",
+            CrnMeasurements(
+                total_nodes=2,
+                nodes_with_identical_asn=1,
+                record_count=5,
+                total_score=0.95,
+                status="dead",
+            ),
+        ),
+    ]
+    _patch_db(
+        monkeypatch,
+        asn_info_name="query_crn_asn_info",
+        measurements_name="query_crn_measurements",
+        stability_name="query_crn_ip_stability",
+        rows=rows,
+    )
+
+    scores = await compute_crn_scores(period=period)
+
+    # Status and code are published for schedulers, but the score is untouched.
+    assert scores[0].total_score == 0.95
+    assert scores[0].status == "dead"
+    assert int(IssueCode.NODE_DEAD) in scores[0].codes

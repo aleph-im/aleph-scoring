@@ -60,6 +60,13 @@ class Settings(BaseSettings):
     # one is scored; the rest are treated as duplicates and forced to 0.
     DUPLICATE_IP_ENFORCED: bool = True
 
+    # A CRN that has not proven it is a real CRN within DEAD_NODE_WINDOW is
+    # considered dead and forced to 0, so schedulers do not pick a host that is
+    # no longer running aleph-vm. Off by default; the status field is always
+    # published so consumers can act on it before enforcement is enabled.
+    DEAD_NODE_WINDOW: timedelta = timedelta(hours=24)
+    DEAD_NODE_ENFORCED: bool = False
+
     class Config:
         env_file = ".env"
         env_prefix = "ALEPH_SCORING_"

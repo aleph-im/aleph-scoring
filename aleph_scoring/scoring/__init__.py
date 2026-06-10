@@ -100,6 +100,46 @@ async def query_crn_ip_stability(
     }
 
 
+async def query_crn_liveness(
+    conn: asyncpg.connection, period: Period
+) -> Dict[str, Dict]:
+    """Query per-CRN proof-of-liveness over the dead-node window.
+
+    Returns ``{node_id: {has_recent_proof, latest_proof}}`` for nodes measured
+    in the last DEAD_NODE_WINDOW.
+    """
+    sql = read_sql_file("query_crn_liveness.sql")
+
+    window_start = period.to_date - settings.DEAD_NODE_WINDOW
+    values = await conn.fetch(
+        sql,
+        settings.ALLOWED_METRICS_SENDER,
+        settings.ALEPH_POST_TYPE_METRICS,
+        window_start.replace(tzinfo=None),
+        period.to_date.replace(tzinfo=None),
+    )
+
+    return {
+        row["node_id"]: {
+            "has_recent_proof": row["has_recent_proof"],
+            "latest_proof": row["latest_proof"],
+        }
+        for row in values
+    }
+
+
+def crn_status(liveness: Optional[Dict]) -> str:
+    """Derive a CRN's liveness status from its proof history.
+
+    No proof in the dead-node window (or no entry at all) -> dead. Otherwise
+    active if the most recent measurement still proves CRN-ness, else inactive.
+    """
+    liveness = liveness or {}
+    if not liveness.get("has_recent_proof"):
+        return "dead"
+    return "active" if liveness.get("latest_proof") else "inactive"
+
+
 def crn_registration_times(node_data: Dict[str, Any]) -> Dict[str, float]:
     """Map each CRN node_id (hash) to its registration timestamp.
 
@@ -193,6 +233,10 @@ def crn_score_codes(measurements: CrnMeasurements) -> List[IssueCode]:
         codes.append(IssueCode.IPV6_UNSTABLE)
     if measurements.duplicate_ip:
         codes.append(IssueCode.DUPLICATE_IP)
+    if measurements.status == "dead":
+        codes.append(IssueCode.NODE_DEAD)
+    elif measurements.status == "inactive":
+        codes.append(IssueCode.NODE_INACTIVE)
     return codes
 
 
@@ -201,6 +245,7 @@ async def query_crn_measurements(
     asn_info: Dict,
     ip_stability: Dict,
     duplicate_ids: Set[str],
+    liveness: Dict,
     period: Period,
 ) -> AsyncIterable[tuple[str, CrnMeasurements]]:
     sql = read_sql_file("dev/neo/query_crn_scores.template.sql")
@@ -232,6 +277,7 @@ async def query_crn_measurements(
         row.update(node_asn_info)
         row.update(_ip_stability_fields(ip_stability.get(node_id)))
         row["duplicate_ip"] = node_id in duplicate_ids
+        row["status"] = crn_status(liveness.get(node_id))
         yield node_id, CrnMeasurements.parse_obj(row)
 
 
@@ -242,6 +288,7 @@ async def compute_crn_scores(
 
     asn_info: Dict[str, Dict] = await query_crn_asn_info(conn, period=period)
     ip_stability: Dict[str, Dict] = await query_crn_ip_stability(conn, period=period)
+    liveness: Dict[str, Dict] = await query_crn_liveness(conn, period=period)
 
     try:
         node_data = await get_aleph_nodes()
@@ -271,6 +318,7 @@ async def compute_crn_scores(
         asn_info,
         ip_stability,
         duplicate_ids,
+        liveness,
         period,
     ):
         # # This contains custom logic on the scores
@@ -362,7 +410,12 @@ async def compute_crn_scores(
             logger.info("Zeroing CRN %s as a duplicate-IP node", node_id)
             total_score = Score(0)
 
-        if settings.DUPLICATE_IP_ENFORCED and measurements.duplicate_ip:
+        is_dead = settings.DEAD_NODE_ENFORCED and measurements.status == "dead"
+        if is_dead:
+            logger.info("Zeroing CRN %s: dead (no proof of being a CRN)", node_id)
+            total_score = Score(0)
+
+        if is_dead or (settings.DUPLICATE_IP_ENFORCED and measurements.duplicate_ip):
             decentralization_score = Score(0)
         else:
             node_asn = asn_info.get(node_id, {}).get("asn")
@@ -381,6 +434,7 @@ async def compute_crn_scores(
                 total_score=total_score,
                 decentralization=decentralization_score,
                 measurements=measurements,
+                status=measurements.status,
                 codes=[int(c) for c in crn_score_codes(measurements)],
             )
         )
