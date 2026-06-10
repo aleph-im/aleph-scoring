@@ -2,9 +2,9 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConstrainedFloat, Field
 
-CrnStatus = Literal["active", "inactive", "dead"]
-
 from aleph_scoring.utils import Period
+
+CrnStatus = Literal["active", "inactive", "dead"]
 
 
 class Score(ConstrainedFloat):
