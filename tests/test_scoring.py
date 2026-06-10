@@ -189,6 +189,8 @@ def _crn_measurements(**overrides) -> CrnMeasurements:
             [IssueCode.NO_IPV6, IssueCode.IPV4_UNSTABLE],
         ),
         ({"duplicate_ip": True}, [IssueCode.DUPLICATE_IP]),
+        ({"status": "dead"}, [IssueCode.NODE_DEAD]),
+        ({"status": "inactive"}, [IssueCode.NODE_INACTIVE]),
     ],
 )
 def test_crn_score_codes(overrides, expected):
