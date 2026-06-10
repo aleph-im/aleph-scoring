@@ -94,6 +94,7 @@ async def query_crn_ip_stability(
             "ipv6_changes": row["ipv6_changes"],
             "ipv4": row["current_ipv4"],
             "ipv6_prefix": row["current_ipv6_prefix"],
+            "verified": row["verified"],
         }
         for row in values
     }
@@ -119,12 +120,15 @@ def compute_duplicate_crns(
     ip_stability: Dict[str, Dict],
     registration_times: Dict[str, float],
 ) -> Set[str]:
-    """Return node_ids that share an IPv4 or IPv6 /64 with an older CRN.
+    """Return node_ids that share an IPv4 or IPv6 /64 with another CRN.
 
-    For each address (IPv4 and IPv6 /64 grouped independently), the
-    earliest-registered node keeps its score and the rest are flagged. A node is
-    penalized if it is not the keeper in its IPv4 cohort or its /64 cohort.
-    Nodes with an unknown registration time sort last, so they never win a tie.
+    For each address (IPv4 and IPv6 /64 grouped independently) one node keeps
+    its score and the rest are flagged. The keeper is the node that proved its
+    identity at /status/config (``verified``) — this defeats DNS spoofing, since
+    a node pointing its domain at someone else's server returns the wrong hash
+    and is never verified. When no node in the group is verified (e.g. the
+    endpoint is unavailable), fall back to the earliest-registered node. Ties
+    and unknown registration times are broken by node_id for determinism.
     """
     penalized: Set[str] = set()
     for key in ("ipv4", "ipv6_prefix"):
@@ -136,9 +140,11 @@ def compute_duplicate_crns(
         for members in groups.values():
             if len(members) < 2:
                 continue
+            verified = [n for n in members if ip_stability[n].get("verified")]
+            candidates = verified or members
             keeper = min(
-                members,
-                key=lambda n: registration_times.get(n, float("inf")),
+                candidates,
+                key=lambda n: (registration_times.get(n, float("inf")), n),
             )
             penalized.update(n for n in members if n != keeper)
     return penalized

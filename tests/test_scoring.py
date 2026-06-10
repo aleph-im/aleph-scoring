@@ -229,6 +229,25 @@ def test_crn_score_codes(overrides, expected):
             {"b": 2},  # "a" has no time
             {"a"},
         ),
+        # Anti-grief: the verified owner is kept even though an older spoofer
+        # (pointing its domain at the owner's IP) shares the address.
+        (
+            {
+                "spoofer": {"ipv4": "1.1.1.1"},
+                "owner": {"ipv4": "1.1.1.1", "verified": True},
+            },
+            {"spoofer": 1, "owner": 2},
+            {"spoofer"},
+        ),
+        # Multiple verified -> earliest verified is kept
+        (
+            {
+                "a": {"ipv4": "1.1.1.1", "verified": True},
+                "b": {"ipv4": "1.1.1.1", "verified": True},
+            },
+            {"a": 2, "b": 1},
+            {"a"},
+        ),
     ],
 )
 def test_compute_duplicate_crns(ip_stability, times, expected):
