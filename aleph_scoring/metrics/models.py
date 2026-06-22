@@ -35,7 +35,13 @@ class CrnMetrics(AlephNodeMetrics):
         default=None, description="Resolved IPv4 address, used to detect IP changes"
     )
     ipv6: Optional[str] = Field(
-        default=None, description="Resolved IPv6 address, used to detect IP changes"
+        default=None, description="Resolved IPv6 address (the node's own access IPv6)"
+    )
+    ipv6_pool: Optional[str] = Field(
+        default=None,
+        description="networking.IPV6_ADDRESS_POOL from /status/config: the range "
+        "the node allocates VM IPv6 addresses from. Used for IPv6 stability and "
+        "duplicate detection, since it can differ from the node's access IPv6",
     )
     config_node_hash: Optional[str] = Field(
         default=None,

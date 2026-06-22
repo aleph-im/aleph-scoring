@@ -1,9 +1,15 @@
+import aiohttp
 import pytest
 from urllib3.util import parse_url
 
 from aleph_scoring import metrics
 from aleph_scoring.issue_codes import IssueCode
-from aleph_scoring.metrics import NodeInfo, crn_measurement_codes, get_crn_metrics
+from aleph_scoring.metrics import (
+    NodeInfo,
+    crn_measurement_codes,
+    fetch_node_config,
+    get_crn_metrics,
+)
 
 
 def _kwargs(**overrides):
@@ -72,3 +78,65 @@ async def test_get_crn_metrics_reports_unexpected_error(monkeypatch):
     assert result.url == "https://crn.example/"
     assert result.codes == [int(IssueCode.UNKNOWN_MEASUREMENT_ERROR)]
     assert result.base_latency is None
+
+
+class _FakeResponse:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def raise_for_status(self):
+        pass
+
+    async def json(self):
+        return self._payload
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+class _FakeSession:
+    """Session whose get() yields a fixed payload, or raises on request."""
+
+    def __init__(self, payload=None, error=None):
+        self._payload = payload
+        self._error = error
+
+    def get(self, url):
+        if self._error is not None:
+            raise self._error
+        return _FakeResponse(self._payload)
+
+
+@pytest.mark.asyncio
+async def test_fetch_node_config_extracts_hash_and_pool():
+    session = _FakeSession(
+        {
+            "node_hash": "b" * 64,
+            "networking": {"IPV6_ADDRESS_POOL": "2607:5300:203:8300::/56"},
+        }
+    )
+    config = await fetch_node_config(session, "https://crn.example/", timeout_seconds=5)
+
+    assert config.node_hash == "b" * 64
+    assert config.ipv6_pool == "2607:5300:203:8300::/56"
+
+
+@pytest.mark.asyncio
+async def test_fetch_node_config_missing_networking_block():
+    session = _FakeSession({"node_hash": "c" * 64})
+    config = await fetch_node_config(session, "https://crn.example/", timeout_seconds=5)
+
+    assert config.node_hash == "c" * 64
+    assert config.ipv6_pool is None
+
+
+@pytest.mark.asyncio
+async def test_fetch_node_config_on_error_returns_empty():
+    session = _FakeSession(error=aiohttp.ClientOSError("down"))
+    config = await fetch_node_config(session, "https://crn.example/", timeout_seconds=5)
+
+    assert config.node_hash is None
+    assert config.ipv6_pool is None

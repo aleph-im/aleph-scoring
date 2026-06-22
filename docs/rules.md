@@ -88,16 +88,20 @@ Reported alongside `total_score`; not folded into it here.
 ### 4. IP-stability penalty
 
 Over `IP_STABILITY_WINDOW`, a representative IP per node per hour is taken
-(`mode()`), and address transitions are counted (`LAG`, nulls ignored). IPv6 is
-compared at the **/64 prefix** (host bits may rotate freely). Active only when
+(`mode()`), and address transitions are counted (`LAG`, nulls ignored). For
+IPv6 the node's **VM address pool** (`networking.IPV6_ADDRESS_POOL` from
+`/status/config`) is used, not the node's own access IPv6 (the AAAA record):
+some operators give the node a default IPv6 for access and route a separate
+range for VMs, so the pool is what identifies the node. The pool is normalised
+to its network/prefix before comparison. Active only when
 `IP_STABILITY_ENFORCED = true`.
 
 | Condition (within window) | Decision impact | Issue code |
 |---|---|---|
 | No IPv4 observed | `total_score → 0` (when enforced) | 1001 `NO_IPV4` |
-| No IPv6 observed | `total_score → 0` (when enforced) | 1002 `NO_IPV6` |
+| No IPv6 pool observed | `total_score → 0` (when enforced) | 1002 `NO_IPV6` |
 | IPv4 changed `>= IP_MAX_CHANGES` (2) times | `total_score → 0` (when enforced) | 1003 `IPV4_UNSTABLE` |
-| IPv6 /64 changed `>= IP_MAX_CHANGES` (2) times | `total_score → 0` (when enforced) | 1004 `IPV6_UNSTABLE` |
+| IPv6 pool changed `>= IP_MAX_CHANGES` (2) times | `total_score → 0` (when enforced) | 1004 `IPV6_UNSTABLE` |
 | No recorded IP history yet (new node) | No penalty (defaults non-penalizing) | — |
 
 Scoring-reason codes are published whenever the condition holds, even while
@@ -106,20 +110,20 @@ drop.
 
 ### 5. Duplicate-IP penalty
 
-Each node's most-recent representative IPv4 and IPv6 /64 are grouped across all
-measured CRNs. For each address (IPv4 and /64 grouped independently), only the
-**earliest-registered** node (node aggregate `time`) keeps its score. Active
-only when `DUPLICATE_IP_ENFORCED = true`.
+Each node's most-recent representative IPv4 and IPv6 VM pool are grouped across
+all measured CRNs. For each address (IPv4 and IPv6 pool grouped independently),
+only the **earliest-registered** node (node aggregate `time`) keeps its score.
+Active only when `DUPLICATE_IP_ENFORCED = true`.
 
 | Condition | Decision impact | Issue code |
 |---|---|---|
 | Shares its IPv4 with an older CRN | `total_score → 0` (when enforced) | 1005 `DUPLICATE_IP` |
-| Shares its IPv6 /64 with an older CRN | `total_score → 0` (when enforced) | 1005 `DUPLICATE_IP` |
+| Shares its IPv6 pool with an older CRN | `total_score → 0` (when enforced) | 1005 `DUPLICATE_IP` |
 | Earliest-registered node on the address | Kept — full score | — |
 | Unique address | No penalty | — |
 
-A node is penalized if it is not the earliest in its IPv4 cohort **or** its /64
-cohort. The code is published whenever the condition holds, even while
+A node is penalized if it is not the earliest in its IPv4 cohort **or** its
+IPv6-pool cohort. The code is published whenever the condition holds, even while
 enforcement is off. Caveat: NAT/reverse-proxy setups can legitimately share an
 IPv4 — observe the published codes before enabling enforcement.
 
@@ -174,8 +178,8 @@ renumbered.**
 | 1001 | `NO_IPV4` | No IPv4 observed in the stability window |
 | 1002 | `NO_IPV6` | No IPv6 observed in the stability window |
 | 1003 | `IPV4_UNSTABLE` | IPv4 address changed too many times |
-| 1004 | `IPV6_UNSTABLE` | IPv6 /64 prefix changed too many times |
-| 1005 | `DUPLICATE_IP` | Shares an IPv4 or IPv6 /64 with an older CRN |
+| 1004 | `IPV6_UNSTABLE` | IPv6 VM pool changed too many times |
+| 1005 | `DUPLICATE_IP` | Shares an IPv4 or IPv6 VM pool with an older CRN |
 | 1006 | `NODE_DEAD` | No proof of being a CRN for 24h; treated as dead |
 | 1007 | `NODE_INACTIVE` | Not currently proving it is a CRN |
 

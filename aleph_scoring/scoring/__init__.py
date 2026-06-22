@@ -93,7 +93,7 @@ async def query_crn_ip_stability(
             "ipv4_changes": row["ipv4_changes"],
             "ipv6_changes": row["ipv6_changes"],
             "ipv4": row["current_ipv4"],
-            "ipv6_prefix": row["current_ipv6_prefix"],
+            "ipv6_pool": row["current_ipv6_pool"],
             "verified": row["verified"],
         }
         for row in values
@@ -160,9 +160,9 @@ def compute_duplicate_crns(
     ip_stability: Dict[str, Dict],
     registration_times: Dict[str, float],
 ) -> Set[str]:
-    """Return node_ids that share an IPv4 or IPv6 /64 with another CRN.
+    """Return node_ids that share an IPv4 or IPv6 VM pool with another CRN.
 
-    For each address (IPv4 and IPv6 /64 grouped independently) one node keeps
+    For each address (IPv4 and IPv6 pool grouped independently) one node keeps
     its score and the rest are flagged. The keeper is the node that proved its
     identity at /status/config (``verified``) — this defeats DNS spoofing, since
     a node pointing its domain at someone else's server returns the wrong hash
@@ -171,7 +171,7 @@ def compute_duplicate_crns(
     and unknown registration times are broken by node_id for determinism.
     """
     penalized: Set[str] = set()
-    for key in ("ipv4", "ipv6_prefix"):
+    for key in ("ipv4", "ipv6_pool"):
         groups: Dict[str, List[str]] = {}
         for node_id, info in ip_stability.items():
             address = info.get(key)

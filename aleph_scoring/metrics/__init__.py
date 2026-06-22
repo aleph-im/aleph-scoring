@@ -388,13 +388,27 @@ async def get_ccn_metrics(
     )
 
 
-async def fetch_node_hash(
-    session: aiohttp.ClientSession, node_url: str, timeout_seconds: int
-) -> Optional[str]:
-    """Fetch the node_hash the node reports at /status/config.
+@dataclass
+class NodeConfig:
+    """Subset of a node's /status/config we record for scoring."""
 
-    Used to verify a node really serves its own identity: a node that points
-    its domain at someone else's server returns that server's node_hash.
+    node_hash: Optional[str] = None
+    ipv6_pool: Optional[str] = None
+
+
+async def fetch_node_config(
+    session: aiohttp.ClientSession, node_url: str, timeout_seconds: int
+) -> NodeConfig:
+    """Fetch the node_hash and VM IPv6 pool the node reports at /status/config.
+
+    ``node_hash`` verifies a node really serves its own identity: a node that
+    points its domain at someone else's server returns that server's node_hash.
+
+    ``ipv6_pool`` is ``networking.IPV6_ADDRESS_POOL`` — the range the node
+    allocates VM addresses from. It is distinct from the node's own access
+    IPv6 (the AAAA record): some operators give the node a default IPv6 for
+    access and route a separate range for VMs, so the pool is the address that
+    matters for IPv6 stability and duplicate detection.
     """
     url = f"{node_url}status/config"
     try:
@@ -402,7 +416,11 @@ async def fetch_node_hash(
             async with session.get(url) as resp:
                 resp.raise_for_status()
                 config = await resp.json()
-                return config.get("node_hash")
+                networking = config.get("networking") or {}
+                return NodeConfig(
+                    node_hash=config.get("node_hash"),
+                    ipv6_pool=networking.get("IPV6_ADDRESS_POOL"),
+                )
     except (
         aiohttp.ClientResponseError,
         aiohttp.ClientConnectorError,
@@ -413,7 +431,7 @@ async def fetch_node_hash(
         asyncio.TimeoutError,
     ) as e:
         logger.debug("Error fetching config from %s: %s: %s", url, type(e).__name__, e)
-        return None
+        return NodeConfig()
 
 
 async def fetch_supported_features(
@@ -572,7 +590,7 @@ async def _measure_crn_metrics(
             sessions.ipv4, f"{url}about/login", expected_status=401
         )
     )[0]
-    config_node_hash = await fetch_node_hash(sessions.any_ip, url, timeout_seconds=5)
+    node_config = await fetch_node_config(sessions.any_ip, url, timeout_seconds=5)
 
     measured_at = datetime.now(tz=timezone.utc)
 
@@ -601,7 +619,8 @@ async def _measure_crn_metrics(
         features=features_supported or [],
         ipv4=ipv4,
         ipv6=ipv6,
-        config_node_hash=config_node_hash,
+        ipv6_pool=node_config.ipv6_pool,
+        config_node_hash=node_config.node_hash,
         codes=[int(c) for c in codes],
     )
 
