@@ -21,7 +21,7 @@ separate `decentralization` value; both are published and combined downstream.
 | `MAX_METRICS_AGE` | 3 hours | If the newest metrics are older than this, the run aborts |
 | `VERSION_GRACE_PERIOD` | 14 days | A replaced software version still counts as valid for this long |
 | `IP_STABILITY_WINDOW` | 365 days | Window for the CRN IP-stability check |
-| `IP_MAX_CHANGES` | 2 | IPv4/IPv6-/64 changes at or above this penalize the node |
+| `IP_MAX_CHANGES` | 2 | IPv4/IPv6-pool changes at or above this penalize the node |
 | `IP_STABILITY_ENFORCED` | `false` | Whether the IP-stability penalty actually zeroes scores |
 | `DUPLICATE_IP_ENFORCED` | `true` | Whether the duplicate-IP penalty actually zeroes scores |
 | `DEAD_NODE_WINDOW` | 24 hours | Window in which a CRN must prove it is a real CRN |
