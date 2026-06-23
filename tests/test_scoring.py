@@ -212,25 +212,25 @@ def test_crn_score_codes(overrides, expected):
             {"a": 1, "b": 2},
             {"b"},
         ),
-        # Same /64: earliest kept
+        # Same IPv6 pool: earliest kept
         (
-            {"a": {"ipv6_prefix": "2a01::/64"}, "b": {"ipv6_prefix": "2a01::/64"}},
+            {"a": {"ipv6_pool": "2a01::/64"}, "b": {"ipv6_pool": "2a01::/64"}},
             {"a": 5, "b": 3},
             {"a"},
         ),
-        # Shares IPv4 with one and /64 with another -> only earliest survives
+        # Shares IPv4 with one and IPv6 pool with another -> only earliest survives
         (
             {
-                "a": {"ipv4": "1.1.1.1", "ipv6_prefix": "2a01::/64"},
+                "a": {"ipv4": "1.1.1.1", "ipv6_pool": "2a01::/64"},
                 "b": {"ipv4": "1.1.1.1"},
-                "c": {"ipv6_prefix": "2a01::/64"},
+                "c": {"ipv6_pool": "2a01::/64"},
             },
             {"a": 1, "b": 2, "c": 3},
             {"b", "c"},
         ),
         # Null addresses are not grouped
         (
-            {"a": {"ipv4": None, "ipv6_prefix": None}, "b": {"ipv4": None}},
+            {"a": {"ipv4": None, "ipv6_pool": None}, "b": {"ipv4": None}},
             {"a": 1, "b": 2},
             set(),
         ),
