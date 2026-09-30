@@ -27,9 +27,7 @@ class Settings(BaseSettings):
     DAEMON_MODE_PERIOD_HOURS: int = 24
     EXECUTIONS_DAEMON_PERIOD_HOURS: int = 1
     EXPORT_DATAFRAME: bool = False
-    ETHEREUM_PRIVATE_KEY: str = (
-        "0x95c6bc829ddf6a83b5d8b228db2942fe828802fb63f412586ea7c2d0036b4020"
-    )
+    ETHEREUM_PRIVATE_KEY: Optional[str] = None
     # If a path is precised, it takes precedence over the private key string
     ETHEREUM_PRIVATE_KEY_PATH: Optional[Path] = None
     HTTP_REQUEST_TIMEOUT: float = 10.0
