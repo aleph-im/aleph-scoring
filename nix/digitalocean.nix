@@ -16,6 +16,14 @@
   # Disk layout for nixos-anywhere via disko
   disko.memSize = 4096; # MB - default 1024 is too low for image builds
 
+  # Low-RAM droplets need swap for nixos-rebuild
+  swapDevices = [
+    {
+      device = "/var/lib/swapfile";
+      size = 2 * 1024;
+    }
+  ];
+
   disko.devices.disk.main = {
     device = "/dev/vda";
     type = "disk";

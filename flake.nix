@@ -54,6 +54,19 @@
       ];
     };
 
+    nixosConfigurations.proxmox-lxc = nixpkgs.lib.nixosSystem {
+      inherit system;
+      modules = [
+        ./nix/proxmox-lxc.nix
+        {
+          services.aleph-scoring = {
+            enable = true;
+            package = aleph-scoring;
+          };
+        }
+      ];
+    };
+
     devShells.${system} = {
       default = pkgs.mkShell {
         name = "metrics-env";

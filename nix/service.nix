@@ -37,22 +37,48 @@ in {
       default = "*-*-* *:00:00";
       description = "Systemd calendar expression for the metrics timer.";
     };
+
+    environmentFile = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = "/etc/aleph-scoring.env";
+      description = ''
+        Optional systemd EnvironmentFile for ALEPH_SCORING_* overrides.
+        The file is created empty if missing and can be edited at runtime
+        without rebuilding the system. Values here override `extraEnvironment`.
+      '';
+    };
+
+    extraEnvironment = lib.mkOption {
+      type = lib.types.attrsOf lib.types.str;
+      default = {};
+      description = "Additional ALEPH_SCORING_* environment variables.";
+    };
   };
 
   config = lib.mkIf cfg.enable {
-    systemd.tmpfiles.rules = ["d ${cfg.asnDbDirectory} 0755 root root -"];
+    systemd.tmpfiles.rules =
+      ["d ${cfg.asnDbDirectory} 0755 root root -"]
+      ++ lib.optional (cfg.environmentFile != null) (
+        "f ${cfg.environmentFile} 0600 root root -"
+      );
 
     systemd.services.aleph-scoring-measure = {
       description = "Regular run of the metrics";
       serviceConfig = {
         Type = "oneshot";
         ExecStart = "${cfg.package}/bin/scoring measure --publish";
-      };
-      environment = {
-        ALEPH_SCORING_ASN_DB_DIRECTORY = cfg.asnDbDirectory;
-        ALEPH_SCORING_ETHEREUM_PRIVATE_KEY_PATH = cfg.ethereumKeyPath;
-        ALEPH_SCORING_SENTRY_DSN_PATH = cfg.sentryDsnPath;
-      };
+      } // (
+        if cfg.environmentFile == null
+        then {}
+        else {EnvironmentFile = cfg.environmentFile;}
+      );
+      environment =
+        {
+          ALEPH_SCORING_ASN_DB_DIRECTORY = cfg.asnDbDirectory;
+          ALEPH_SCORING_ETHEREUM_PRIVATE_KEY_PATH = cfg.ethereumKeyPath;
+          ALEPH_SCORING_SENTRY_DSN_PATH = cfg.sentryDsnPath;
+        }
+        // cfg.extraEnvironment;
     };
 
     systemd.timers.aleph-scoring-measure = {
@@ -65,14 +91,6 @@ in {
     };
 
     environment.systemPackages = [cfg.package pkgs.btop];
-
-    # Low-RAM droplets need swap for nixos-rebuild
-    swapDevices = [
-      {
-        device = "/var/lib/swapfile";
-        size = 2 * 1024;
-      }
-    ];
 
     services.openssh = {
       enable = true;
