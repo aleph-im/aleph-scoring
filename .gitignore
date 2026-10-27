@@ -15,3 +15,9 @@ asnames.json
 
 # Nix build output
 result
+
+# Backfill plan cache
+.backfill_cache/
+
+# Internal tools, never commit
+/backfill_metrics.py
