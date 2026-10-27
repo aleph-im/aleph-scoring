@@ -89,8 +89,7 @@ SELECT node ->> 'node_id'                                                       
         count(case when (coalesce(node ->> 'version', '') = '') then 1 end) as node_version_missing
 FROM posts,
      jsonb_array_elements(content -> 'metrics' -> 'crn') node
-WHERE owner = $1
-    /*owner = ANY($3::text[])*/
+WHERE owner = ANY($1::text[])
   AND type = $2
   AND to_timestamp((node -> 'measured_at')::float)::timestamp > $3::timestamp
   AND to_timestamp((node -> 'measured_at')::float)::timestamp < $4::timestamp

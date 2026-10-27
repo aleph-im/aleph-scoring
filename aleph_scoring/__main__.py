@@ -124,7 +124,7 @@ async def get_latest_metrics() -> dict:
             *
         FROM posts
         WHERE
-            owner = $1
+            owner = ANY($1::text[])
             AND type = $2
         ORDER BY
             creation_datetime DESC

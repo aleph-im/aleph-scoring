@@ -6,7 +6,7 @@ SELECT node ->> 'node_id'                         as node_id,
 
 FROM posts,
      jsonb_array_elements(content -> 'metrics' -> $4) node
-WHERE owner = $1
+WHERE owner = ANY($1::text[])
   AND type = $5
   AND to_timestamp((node -> 'measured_at')::float)::timestamp > $2::timestamp
   AND to_timestamp((node -> 'measured_at')::float)::timestamp < $3::timestamp

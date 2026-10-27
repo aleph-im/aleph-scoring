@@ -1,7 +1,8 @@
+import json
 import logging
 from datetime import timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Any, List, Optional
 
 from pydantic import BaseSettings, HttpUrl
 
@@ -10,7 +11,10 @@ class Settings(BaseSettings):
     NODE_DATA_HOST: str = "https://official.aleph.cloud"
     NODE_DATA_ADDR: str = "0xa1B3bb7d2332383D96b7796B908fB7f7F3c2Be10"
 
-    ALLOWED_METRICS_SENDER = "0x4D52380D3191274a04846c89c069E6C3F2Ed94e4"
+    ALLOWED_METRICS_SENDER: List[str] = [
+        "0x289670c1703551198cb16b7608fAb4946181D339",
+        "0xDBCED11DFc1b95cb6683a89e6c7beF32Facfc0F6",
+    ]
 
     DATABASE_USER = "aleph"
     DATABASE_PASSWORD = "569b8f23-0de6-4927-a15d-7157d8583e43"
@@ -68,6 +72,20 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         env_prefix = "ALEPH_SCORING_"
+
+        @classmethod
+        def parse_env_var(cls, field_name: str, raw_val: str) -> Any:
+            """Accept a JSON array or a comma-separated list from the env."""
+            if field_name.lower() == "allowed_metrics_sender":
+                stripped = raw_val.strip()
+                if stripped.startswith("["):
+                    return json.loads(stripped)
+                return [
+                    sender.strip()
+                    for sender in stripped.split(",")
+                    if sender.strip()
+                ]
+            return cls.json_loads(raw_val)
 
 
 settings = Settings()

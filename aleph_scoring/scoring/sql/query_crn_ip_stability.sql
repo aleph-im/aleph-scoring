@@ -26,7 +26,7 @@ WITH ip_observations AS (
         ((node ->> 'config_node_hash') = (node ->> 'node_id')) AS verified
     FROM posts,
          jsonb_array_elements(content -> 'metrics' -> 'crn') node
-    WHERE owner = $1
+    WHERE owner = ANY($1::text[])
       AND type = $2
       AND posts.creation_datetime >= $3::timestamp
       AND posts.creation_datetime < $4::timestamp

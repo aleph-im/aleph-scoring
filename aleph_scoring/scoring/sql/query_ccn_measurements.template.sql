@@ -119,7 +119,7 @@ SELECT node ->> 'node_id'                                                  as no
 
 FROM posts,
      jsonb_array_elements(content -> 'metrics' -> 'ccn') node
-WHERE owner = $1
+WHERE owner = ANY($1::text[])
   AND type = $2
   AND to_timestamp((node -> 'measured_at')::float)::timestamp >= $3::timestamp
   AND to_timestamp((node -> 'measured_at')::float)::timestamp < $4::timestamp

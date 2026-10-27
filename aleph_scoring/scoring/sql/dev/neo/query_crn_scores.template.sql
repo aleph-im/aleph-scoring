@@ -10,7 +10,7 @@ WITH base_query AS (
         MAX(is_version_valid('aleph-vm', node ->> 'version', to_timestamp((node ->> 'measured_at')::float)::date)) AS version_valid
     FROM posts,
          jsonb_array_elements(content -> 'metrics' -> 'crn') node
-    WHERE owner = $5
+    WHERE owner = ANY($5::text[])
       AND type = $6
       AND posts.creation_datetime >= $2::timestamp
       AND posts.creation_datetime < $1::timestamp
