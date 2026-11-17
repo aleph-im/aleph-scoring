@@ -269,7 +269,7 @@ def measure_on_schedule(
 
     schedule.every(settings.DAEMON_MODE_PERIOD_HOURS).hours.at(":00").do(
         compute_scores,
-        save=output,
+        output=output,
         publish=publish,
         log_level=log_level,
     )
