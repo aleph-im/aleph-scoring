@@ -30,6 +30,7 @@ import pyasn
 from aleph.sdk import AlephHttpClient
 from aleph_message.models import ItemHash
 from icmplib import async_ping
+from icmplib.exceptions import SocketPermissionError
 from pydantic import BaseModel, validator
 from urllib3.util import Url, parse_url
 
@@ -256,11 +257,30 @@ def get_executable_ipv6(
 async def ping(
     ip_address: Union[IPv4Address, IPv6Address], count: int
 ) -> Optional[float]:
-    """Ping an IP address and return the minimum response time in seconds."""
-    result = await async_ping(
-        address=str(ip_address), count=count, timeout=2, privileged=False
-    )
-    if result.is_alive:
+    """Ping an IP address and return the minimum response time in seconds.
+
+    Falls back to a privileged (raw) ICMP socket when unprivileged ICMP is
+    unavailable, e.g. in containers where ``net.ipv4.ping_group_range`` does
+    not allow the service's group.
+    """
+    result = None
+    for privileged in (False, True):
+        try:
+            result = await async_ping(
+                address=str(ip_address),
+                count=count,
+                timeout=2,
+                privileged=privileged,
+            )
+            break
+        except SocketPermissionError:
+            if privileged:
+                raise
+            logger.debug(
+                "Unprivileged ICMP unavailable for %s; retrying privileged",
+                ip_address,
+            )
+    if result is not None and result.is_alive:
         return result.min_rtt / 1000  # Result is in milliseconds
 
     logger.debug("Ping %s timed out", str(ip_address))
@@ -271,18 +291,29 @@ async def ping_vm(crn_url: str, vm_hash: ItemHash) -> Optional[float]:
     """Ping a VM over IPv6 and return the minimum response time in seconds.
 
     The current implementation only sends one ping packet, so the result
-    is the response time of the single packet.
+    is the response time of the single packet. Failures are logged and
+    reported as ``None``: the metric is diagnostic and must not invalidate
+    the latencies already measured for the node.
     """
-    crn_ipv6: Optional[str] = get_ipv6(crn_url)
-    if not crn_ipv6:
+    try:
+        crn_ipv6: Optional[str] = get_ipv6(crn_url)
+        if not crn_ipv6:
+            return None
+
+        crn_ipv6_range = IPv6Network(crn_ipv6, strict=False)
+        vm_ipv6: IPv6Address = get_executable_ipv6(
+            crn_ipv6_range=crn_ipv6_range, vm_type=VmType.microvm, item_hash=vm_hash
+        )
+
+        min_response_time = await ping(vm_ipv6, count=1)
+    except Exception:
+        logger.warning(
+            "Could not ping diagnostic VM for %s; ignoring ping latency",
+            crn_url,
+            exc_info=True,
+        )
         return None
 
-    crn_ipv6_range = IPv6Network(crn_ipv6, strict=False)
-    vm_ipv6: IPv6Address = get_executable_ipv6(
-        crn_ipv6_range=crn_ipv6_range, vm_type=VmType.microvm, item_hash=vm_hash
-    )
-
-    min_response_time = await ping(vm_ipv6, count=1)
     if min_response_time:
         logger.debug(
             "VM %s is reachable over IPv6, pinged in %.2f seconds",

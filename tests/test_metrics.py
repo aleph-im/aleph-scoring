@@ -1,5 +1,9 @@
+from ipaddress import IPv6Address
+
 import aiohttp
 import pytest
+from aleph_message.models import ItemHash
+from icmplib.exceptions import SocketPermissionError
 from urllib3.util import parse_url
 
 from aleph_scoring import metrics
@@ -140,3 +144,38 @@ async def test_fetch_node_config_on_error_returns_empty():
 
     assert config.node_hash is None
     assert config.ipv6_pool is None
+
+
+@pytest.mark.asyncio
+async def test_ping_falls_back_to_privileged(monkeypatch):
+    calls = []
+
+    class _Result:
+        is_alive = True
+        min_rtt = 12.0
+
+    async def _fake_ping(**kwargs):
+        calls.append(kwargs["privileged"])
+        if not kwargs["privileged"]:
+            raise SocketPermissionError(False)
+        return _Result()
+
+    monkeypatch.setattr(metrics, "async_ping", _fake_ping)
+
+    latency = await metrics.ping(IPv6Address("2a01:db8::1"), count=1)
+
+    assert latency == pytest.approx(0.012)
+    assert calls == [False, True]
+
+
+@pytest.mark.asyncio
+async def test_ping_vm_returns_none_when_ping_fails(monkeypatch):
+    async def _boom(*args, **kwargs):
+        raise RuntimeError("no ICMP permission")
+
+    monkeypatch.setattr(metrics, "get_ipv6", lambda url: "2a01:db8::1")
+    monkeypatch.setattr(metrics, "ping", _boom)
+
+    result = await metrics.ping_vm("https://crn.example/", ItemHash("a" * 64))
+
+    assert result is None
