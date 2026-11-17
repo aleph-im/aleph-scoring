@@ -14,6 +14,7 @@ WITH base_query AS (
       AND type = $6
       AND posts.creation_datetime >= $2::timestamp
       AND posts.creation_datetime < $1::timestamp
+      AND NOT (coalesce(node -> 'codes', '[]'::jsonb) @> '2999'::jsonb)
       --AND node ->> 'node_id' IN ()
     GROUP BY node ->> 'node_id', date_trunc('hour', posts.creation_datetime)
 ),
